@@ -1,7 +1,7 @@
 ﻿import React, { useState } from 'react';
 import { 
-  Heart, AlertTriangle, Phone, ShieldAlert, Pill, 
-  Activity, CheckCircle2, User, Copy, Check, Info, FileText 
+  Heart, AlertTriangle, Phone, ShieldCheck, Pill, 
+  Activity, CheckCircle2, User, Copy, Check, Info, FileText, ArrowRight 
 } from 'lucide-react';
 import { MedicalInfo } from '../types/card';
 import { generateNdefTextPayload } from '../lib/nfc';
@@ -18,31 +18,28 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ medical, cardId 
     const text = generateNdefTextPayload(medical);
     navigator.clipboard.writeText(text);
     setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-rose-950 via-slate-950 to-slate-950 text-slate-100 pb-16">
-      {/* Top Emergency Banner */}
-      <div className="bg-gradient-to-r from-red-600 via-rose-600 to-red-700 text-white px-4 py-3 shadow-lg shadow-red-950/40 sticky top-0 z-50">
+    <div className="min-h-screen bg-slate-950 text-slate-100 pb-20 selection:bg-[#509BEC] selection:text-white">
+      {/* Top Banner - Serene & Trustworthy Deep Teal */}
+      <div className="bg-gradient-to-r from-[#14798D] via-[#0E6476] to-[#14798D] text-white px-4 py-3 shadow-lg shadow-[#14798D]/20 sticky top-0 z-50">
         <div className="max-w-md mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="bg-white text-red-600 p-1.5 rounded-full animate-pulse">
-              <ShieldAlert className="w-5 h-5" />
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-white/15 text-white flex items-center justify-center backdrop-blur-sm">
+              <ShieldCheck className="w-5 h-5 text-[#D1C8B9]" />
             </div>
             <div>
-              <div className="text-xs font-semibold tracking-wider uppercase text-red-100">Acil Durum Medikal Profili</div>
-              <div className="text-sm font-black flex items-center gap-1.5">
-                <span>HAYATİ SAĞLIK BİLGİLERİ</span>
-                <span className="bg-red-800/80 text-[10px] px-1.5 py-0.5 rounded font-mono">ŞİFRESİZ / AÇIK</span>
-              </div>
+              <div className="text-[10px] font-bold tracking-wider uppercase text-[#D1C8B9]">Medikal Sağlık Profili</div>
+              <div className="text-xs font-black tracking-wide text-white">HAYAT KURTARAN DİJİTAL KİMLİK</div>
             </div>
           </div>
           <div className="text-right">
-            <span className="text-[11px] font-mono text-red-200 block">KOD: {cardId}</span>
-            <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 px-1.5 py-0.5 rounded-full border border-emerald-500/30">
+            <span className="text-[10px] font-mono text-[#D1C8B9] block font-semibold">{cardId}</span>
+            <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
-              Aktif
+              Açık / Aktif
             </span>
           </div>
         </div>
@@ -50,58 +47,58 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ medical, cardId 
 
       <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
         {/* Profile Card & Blood Type Spotlight */}
-        <div className="bg-slate-900/90 border-2 border-red-500/30 rounded-2xl p-5 backdrop-blur-md shadow-xl relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-red-600/10 rounded-full blur-2xl pointer-events-none"></div>
+        <div className="bg-gradient-to-br from-[#14798D]/25 via-slate-900 to-slate-950 border border-[#14798D]/40 rounded-3xl p-5 shadow-xl relative overflow-hidden backdrop-blur-md">
+          <div className="absolute top-0 right-0 w-36 h-36 bg-[#509BEC]/10 rounded-full blur-2xl pointer-events-none"></div>
 
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3.5">
               <div className="relative">
                 {medical.avatarUrl ? (
                   <img 
                     src={medical.avatarUrl} 
                     alt={medical.fullName} 
-                    className="w-16 h-16 rounded-2xl object-cover border-2 border-red-500/40 shadow-md"
+                    className="w-16 h-16 rounded-2xl object-cover border-2 border-[#509BEC]/60 shadow-md"
                   />
                 ) : (
                   <div className="w-16 h-16 rounded-2xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400">
                     <User className="w-8 h-8" />
                   </div>
                 )}
-                <div className="absolute -bottom-1 -right-1 bg-red-600 text-white rounded-full p-1 border-2 border-slate-900">
-                  <Activity className="w-3.5 h-3.5" />
+                <div className="absolute -bottom-1 -right-1 bg-[#14798D] text-white rounded-full p-1 border-2 border-slate-950">
+                  <Activity className="w-3.5 h-3.5 text-[#D1C8B9]" />
                 </div>
               </div>
 
               <div>
-                <h1 className="text-xl font-bold text-white tracking-tight">{medical.fullName}</h1>
-                <p className="text-sm text-slate-400">
-                  Doğum Yılı: <span className="font-semibold text-slate-200">{medical.birthYear}</span> 
+                <h1 className="text-lg font-black text-white tracking-tight">{medical.fullName}</h1>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Doğum Yılı: <span className="font-bold text-[#D1C8B9]">{medical.birthYear}</span> 
                   {' '}({new Date().getFullYear() - medical.birthYear} Yaşında)
                 </p>
                 {medical.organDonor && (
-                  <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-medium bg-emerald-950/80 text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-800/40">
-                    <CheckCircle2 className="w-3 h-3" /> Organ Bağışçısı
+                  <span className="inline-flex items-center gap-1 mt-1 text-[10px] font-semibold bg-emerald-950/80 text-emerald-300 px-2 py-0.5 rounded-md border border-emerald-800/40">
+                    <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Organ Bağışçısı
                   </span>
                 )}
               </div>
             </div>
 
-            {/* Huge Blood Type Badge */}
-            <div className="bg-gradient-to-br from-red-600 to-rose-700 text-white rounded-2xl p-3 text-center shadow-lg shadow-red-900/40 min-w-[76px] border border-red-400/30">
-              <div className="text-[9px] font-bold uppercase tracking-wider text-red-200">KAN GRUBU</div>
+            {/* Blood Type Badge in Deep Teal & Linen */}
+            <div className="bg-gradient-to-br from-[#14798D] to-[#0E6476] text-white rounded-2xl p-3 text-center shadow-lg min-w-[76px] border border-[#509BEC]/40">
+              <div className="text-[8px] font-bold uppercase tracking-wider text-[#D1C8B9]">KAN GRUBU</div>
               <div className="text-2xl font-black tracking-tight leading-none mt-1">{medical.bloodType}</div>
             </div>
           </div>
         </div>
 
-        {/* Emergency Contacts (ICE) - Call to Action */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3">
+        {/* Emergency Contacts (ICE) */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 space-y-3 shadow-lg">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <Phone className="w-4 h-4 text-red-500" />
-              Acil Aranacak Kişiler (ICE)
+            <h2 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+              <Phone className="w-4 h-4 text-[#509BEC]" />
+              Acil Durumda Aranacak Kişiler (ICE)
             </h2>
-            <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded">Dokunarak Ara</span>
+            <span className="text-[10px] text-slate-400 bg-slate-800 px-2 py-0.5 rounded font-medium">Tek Dokunuşla Ara</span>
           </div>
 
           <div className="space-y-2">
@@ -109,34 +106,34 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ medical, cardId 
               <a
                 key={contact.id}
                 href={`tel:${contact.phone}`}
-                className="flex items-center justify-between p-3 rounded-xl bg-slate-800/80 hover:bg-red-950/40 border border-slate-700/60 hover:border-red-500/50 transition-all duration-200 group"
+                className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-800/80 hover:bg-[#14798D]/20 border border-slate-700/60 hover:border-[#14798D]/60 transition-all duration-200 group"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-red-600/20 text-red-400 flex items-center justify-center border border-red-500/30 group-hover:scale-105 transition-transform">
+                  <div className="w-9 h-9 rounded-xl bg-[#509BEC]/20 text-[#509BEC] flex items-center justify-center border border-[#509BEC]/30 group-hover:scale-105 transition-transform">
                     <Phone className="w-4 h-4" />
                   </div>
                   <div>
-                    <div className="font-semibold text-sm text-white group-hover:text-red-300 transition-colors">
+                    <div className="font-bold text-sm text-white group-hover:text-[#509BEC] transition-colors">
                       {contact.name}
                     </div>
                     <div className="text-xs text-slate-400">
-                      Yakınlık: <span className="text-slate-300 font-medium">{contact.relation}</span>
+                      Yakınlık: <span className="text-[#D1C8B9] font-medium">{contact.relation}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 text-red-400 font-mono text-xs font-semibold bg-red-500/10 px-2.5 py-1.5 rounded-lg border border-red-500/20 group-hover:bg-red-600 group-hover:text-white transition-all">
+                <div className="bg-[#509BEC] hover:bg-[#4085d4] text-white text-xs font-bold px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md group-hover:scale-105 transition-all">
                   <span>ARA</span>
-                  <Phone className="w-3 h-3" />
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </div>
               </a>
             ))}
           </div>
         </div>
 
-        {/* Critical Allergies */}
-        <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-2.5">
-          <h2 className="text-sm font-bold text-amber-400 flex items-center gap-2">
+        {/* Allergies & Sensitivities */}
+        <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 space-y-2.5 shadow-lg">
+          <h2 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-amber-500" />
             Alerjiler ve Hassasiyetler
           </h2>
@@ -145,7 +142,7 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ medical, cardId 
               {medical.allergies.map((allergy, index) => (
                 <span 
                   key={index}
-                  className="bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-3 py-1.5 rounded-lg font-medium flex items-center gap-1.5 shadow-sm"
+                  className="bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs px-3 py-1.5 rounded-xl font-medium flex items-center gap-1.5"
                 >
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
                   {allergy}
@@ -159,36 +156,34 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ medical, cardId 
 
         {/* Chronic Conditions & Medications */}
         <div className="grid grid-cols-1 gap-3">
-          {/* Chronic */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-2">
-            <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <Heart className="w-4 h-4 text-rose-500" />
+          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 space-y-2 shadow-lg">
+            <h2 className="text-xs font-bold text-[#D1C8B9] uppercase tracking-wider flex items-center gap-2">
+              <Heart className="w-4 h-4 text-[#14798D]" />
               Kronik Rahatsızlıklar
             </h2>
             <div className="space-y-1.5">
               {medical.chronicDiseases.map((disease, idx) => (
-                <div key={idx} className="text-xs bg-slate-800/60 border border-slate-700/40 px-3 py-2 rounded-lg text-slate-200 flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-rose-500"></div>
+                <div key={idx} className="text-xs bg-slate-800/60 border border-slate-700/40 px-3 py-2 rounded-xl text-slate-200 flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#509BEC]"></div>
                   {disease}
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Medications */}
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-2">
-            <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <Pill className="w-4 h-4 text-blue-400" />
+          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 space-y-2 shadow-lg">
+            <h2 className="text-xs font-bold text-[#509BEC] uppercase tracking-wider flex items-center gap-2">
+              <Pill className="w-4 h-4 text-[#509BEC]" />
               Sürekli Kullanılan İlaçlar
             </h2>
             <div className="space-y-2">
               {medical.medications.map((med, idx) => (
-                <div key={idx} className="bg-slate-800/60 border border-slate-700/40 p-2.5 rounded-lg flex items-center justify-between">
+                <div key={idx} className="bg-slate-800/60 border border-slate-700/40 p-2.5 rounded-xl flex items-center justify-between">
                   <div>
                     <div className="text-xs font-semibold text-white">{med.name}</div>
                     <div className="text-[11px] text-slate-400">{med.dosage}</div>
                   </div>
-                  <span className="text-[10px] bg-blue-500/10 text-blue-300 px-2 py-0.5 rounded border border-blue-500/20">
+                  <span className="text-[10px] bg-[#509BEC]/10 text-[#509BEC] px-2 py-0.5 rounded-md border border-[#509BEC]/20 font-medium">
                     Düzenli
                   </span>
                 </div>
@@ -197,49 +192,42 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ medical, cardId 
           </div>
         </div>
 
-        {/* Doctor Note & Implants */}
-        {(medical.doctorNote || medical.hasImplant) && (
-          <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-2">
-            <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
-              <FileText className="w-4 h-4 text-emerald-400" />
-              Tıbbi Notlar &amp; Uyarılar
+        {/* Doctor Note */}
+        {medical.doctorNote && (
+          <div className="bg-slate-900/90 border border-slate-800 rounded-3xl p-4 space-y-2 shadow-lg">
+            <h2 className="text-xs font-bold text-[#D1C8B9] uppercase tracking-wider flex items-center gap-2">
+              <FileText className="w-4 h-4 text-[#14798D]" />
+              Tıbbi Notlar &amp; İlk Yardım Açıklaması
             </h2>
-            {medical.hasImplant && (
-              <div className="bg-indigo-950/40 border border-indigo-500/30 p-2.5 rounded-lg text-xs text-indigo-200">
-                <span className="font-semibold text-indigo-300">⚠️ Tıbbi Cihaz / İmplant:</span> {medical.implantDetails}
-              </div>
-            )}
-            {medical.doctorNote && (
-              <p className="text-xs text-slate-300 bg-slate-800/60 p-3 rounded-lg border border-slate-700/40 italic leading-relaxed">
-                "{medical.doctorNote}"
-              </p>
-            )}
+            <p className="text-xs text-slate-300 bg-slate-800/60 p-3 rounded-xl border border-slate-700/40 italic leading-relaxed">
+              "{medical.doctorNote}"
+            </p>
           </div>
         )}
 
-        {/* Fast Action Buttons */}
-        <div className="pt-2 flex items-center gap-2">
+        {/* Copy summary action */}
+        <div className="pt-2">
           <button
             onClick={handleCopySummary}
-            className="flex-1 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-98 shadow-md"
+            className="w-full bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold py-3 px-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-98 shadow-md"
           >
             {copied ? (
               <>
                 <Check className="w-4 h-4 text-emerald-400" />
-                <span className="text-emerald-300">Metin Kopyalandı!</span>
+                <span className="text-emerald-300 font-bold">İlk Yardım Metni Kopyalandı!</span>
               </>
             ) : (
               <>
-                <Copy className="w-4 h-4 text-slate-400" />
+                <Copy className="w-4 h-4 text-[#509BEC]" />
                 <span>İlk Yardım Metnini Kopyala</span>
               </>
             )}
           </button>
         </div>
 
-        <div className="text-center pt-3 pb-6 text-slate-500 text-[11px] flex items-center justify-center gap-1.5">
-          <Info className="w-3.5 h-3.5" />
-          <span>Bu profil acil tıbbi müdahale ve hayat kurtarma amacıyla açıktır.</span>
+        <div className="text-center pt-2 pb-6 text-slate-500 text-[11px] flex items-center justify-center gap-1.5">
+          <Info className="w-3.5 h-3.5 text-slate-500" />
+          <span>Bu profil acil tıbbi müdahale ve hayat kurtarma amacıyla açık tutulmaktadır.</span>
         </div>
       </main>
     </div>
