@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect } from 'react';
 import { 
-  ShieldAlert, CreditCard, LayoutDashboard, QrCode, Smartphone, KeyRound, Sparkles 
+  ShieldAlert, CreditCard, LayoutDashboard, QrCode, Smartphone, KeyRound, Palette 
 } from 'lucide-react';
 import { SmartCard } from './types/card';
 import { getStoredCardData } from './lib/storage';
@@ -11,12 +11,13 @@ import { CardSimulatorView } from './components/CardSimulatorView';
 import { QrCodeExporter } from './components/QrCodeExporter';
 import { NfcPayloadHelper } from './components/NfcPayloadHelper';
 import { CryptoVaultView } from './components/CryptoVaultView';
+import { ThemePreviewView } from './components/ThemePreviewView';
 
-type AppTab = 'simulator' | 'sos' | 'personal' | 'dashboard' | 'vault' | 'print_nfc';
+type AppTab = 'palette' | 'simulator' | 'sos' | 'personal' | 'dashboard' | 'vault' | 'print_nfc';
 
 export function App() {
   const [card, setCard] = useState<SmartCard>(getStoredCardData());
-  const [activeTab, setActiveTab] = useState<AppTab>('simulator');
+  const [activeTab, setActiveTab] = useState<AppTab>('palette');
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -34,28 +35,40 @@ export function App() {
       <header className="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md shadow-sm">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div 
-            onClick={() => setActiveTab('simulator')}
+            onClick={() => setActiveTab('palette')}
             className="flex items-center gap-2.5 cursor-pointer select-none group"
           >
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-red-600 via-rose-500 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-rose-950/40 group-hover:scale-105 transition-transform">
-              <ShieldAlert className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#14798D] via-[#509BEC] to-[#D1C8B9] flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
+              <Palette className="w-5 h-5 text-slate-900" />
             </div>
             <div>
               <div className="text-sm font-black tracking-tight text-white flex items-center gap-1.5">
                 <span>HİBRİT AKILLI KART</span>
-                <span className="text-[10px] bg-red-600/20 text-red-400 border border-red-500/30 px-1.5 py-0.2 rounded font-mono">v1.1</span>
+                <span className="text-[10px] bg-[#14798D]/30 text-[#509BEC] border border-[#14798D]/50 px-1.5 py-0.2 rounded font-mono">v1.2</span>
               </div>
-              <div className="text-[10px] text-slate-400 font-medium">Three.js 3D + AES-GCM Kripto Kasa</div>
+              <div className="text-[10px] text-[#D1C8B9] font-medium">Lüks Teal &amp; Azure Paleti</div>
             </div>
           </div>
 
           {/* Desktop Navigation Tabs */}
           <nav className="hidden md:flex items-center gap-1 bg-slate-950/70 p-1 rounded-2xl border border-slate-800">
             <button
+              onClick={() => setActiveTab('palette')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                activeTab === 'palette'
+                  ? 'bg-gradient-to-r from-[#14798D] to-[#509BEC] text-white shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+              }`}
+            >
+              <Palette className="w-3.5 h-3.5 text-[#D1C8B9]" />
+              <span>🎨 Renk Paleti (Açık/Kapalı)</span>
+            </button>
+
+            <button
               onClick={() => setActiveTab('simulator')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'simulator'
-                  ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-sm'
+                  ? 'bg-[#14798D] text-white shadow-sm'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
@@ -67,11 +80,11 @@ export function App() {
               onClick={() => setActiveTab('sos')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'sos'
-                  ? 'bg-red-600 text-white shadow-sm'
+                  ? 'bg-[#14798D] text-white shadow-sm'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              <ShieldAlert className="w-3.5 h-3.5 text-red-400" />
+              <ShieldAlert className="w-3.5 h-3.5 text-[#509BEC]" />
               <span>Ön Yüz (SOS)</span>
             </button>
 
@@ -79,11 +92,11 @@ export function App() {
               onClick={() => setActiveTab('personal')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'personal'
-                  ? 'bg-blue-600 text-white shadow-sm'
+                  ? 'bg-[#509BEC] text-white shadow-sm'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              <CreditCard className="w-3.5 h-3.5 text-blue-400" />
+              <CreditCard className="w-3.5 h-3.5 text-[#D1C8B9]" />
               <span>Arka Yüz (Kişisel)</span>
             </button>
 
@@ -91,12 +104,12 @@ export function App() {
               onClick={() => setActiveTab('vault')}
               className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                 activeTab === 'vault'
-                  ? 'bg-indigo-600 text-white shadow-sm'
+                  ? 'bg-slate-800 text-white shadow-sm'
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              <KeyRound className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Kripto Kasa (AES)</span>
+              <KeyRound className="w-3.5 h-3.5" />
+              <span>Kasa (AES)</span>
             </button>
 
             <button
@@ -119,8 +132,8 @@ export function App() {
                   : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
               }`}
             >
-              <QrCode className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Baskı &amp; NFC</span>
+              <QrCode className="w-3.5 h-3.5 text-[#509BEC]" />
+              <span>Baskı/NFC</span>
             </button>
           </nav>
         </div>
@@ -128,6 +141,12 @@ export function App() {
 
       {/* Main Content Render */}
       <main className="flex-1">
+        {activeTab === 'palette' && (
+          <ThemePreviewView 
+            card={card} 
+          />
+        )}
+
         {activeTab === 'simulator' && (
           <CardSimulatorView 
             card={card} 
@@ -174,9 +193,19 @@ export function App() {
       {/* Mobile Bottom Navigation Bar */}
       <div className="md:hidden fixed bottom-0 inset-x-0 bg-slate-900/95 border-t border-slate-800 backdrop-blur-md px-2 py-1.5 z-50 flex items-center justify-around">
         <button
+          onClick={() => setActiveTab('palette')}
+          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-semibold ${
+            activeTab === 'palette' ? 'text-[#509BEC]' : 'text-slate-400'
+          }`}
+        >
+          <Palette className="w-4 h-4" />
+          <span>Palet</span>
+        </button>
+
+        <button
           onClick={() => setActiveTab('simulator')}
           className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-semibold ${
-            activeTab === 'simulator' ? 'text-indigo-400' : 'text-slate-400'
+            activeTab === 'simulator' ? 'text-[#14798D]' : 'text-slate-400'
           }`}
         >
           <Smartphone className="w-4 h-4" />
@@ -186,7 +215,7 @@ export function App() {
         <button
           onClick={() => setActiveTab('sos')}
           className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-semibold ${
-            activeTab === 'sos' ? 'text-red-400' : 'text-slate-400'
+            activeTab === 'sos' ? 'text-[#509BEC]' : 'text-slate-400'
           }`}
         >
           <ShieldAlert className="w-4 h-4" />
@@ -196,21 +225,11 @@ export function App() {
         <button
           onClick={() => setActiveTab('personal')}
           className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-semibold ${
-            activeTab === 'personal' ? 'text-blue-400' : 'text-slate-400'
+            activeTab === 'personal' ? 'text-[#D1C8B9]' : 'text-slate-400'
           }`}
         >
           <CreditCard className="w-4 h-4" />
           <span>Kişisel</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('vault')}
-          className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-semibold ${
-            activeTab === 'vault' ? 'text-indigo-400' : 'text-slate-400'
-          }`}
-        >
-          <KeyRound className="w-4 h-4" />
-          <span>Kasa</span>
         </button>
 
         <button

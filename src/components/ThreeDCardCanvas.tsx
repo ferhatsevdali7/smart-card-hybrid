@@ -59,7 +59,7 @@ function CardMesh({ card, isFlipped, onFlip }: CardMeshProps) {
       {/* Physical Card Body (CR-80 Dimensions: ~3.375 x 2.125 x 0.04 units) */}
       <RoundedBox args={[3.375, 2.125, 0.04]} radius={0.12} smoothness={4}>
         <meshPhysicalMaterial
-          color={isFlipped ? "#090d16" : "#881337"}
+          color={isFlipped ? "#090d16" : "#14798D"}
           roughness={0.25}
           metalness={0.8}
           clearcoat={0.9}
@@ -73,7 +73,7 @@ function CardMesh({ card, isFlipped, onFlip }: CardMeshProps) {
         <Text
           position={[-1.3, 0.75, 0]}
           fontSize={0.11}
-          color="#fecdd3"
+          color="#D1C8B9"
           anchorX="left"
           anchorY="middle"
           fontWeight="bold"
@@ -95,7 +95,7 @@ function CardMesh({ card, isFlipped, onFlip }: CardMeshProps) {
         <Text
           position={[-1.3, -0.05, 0]}
           fontSize={0.09}
-          color="#fda4af"
+          color="#D1C8B9"
           anchorX="left"
           anchorY="middle"
         >
@@ -105,7 +105,7 @@ function CardMesh({ card, isFlipped, onFlip }: CardMeshProps) {
         {/* Blood Type Badge In 3D */}
         <group position={[1.1, 0.15, 0]}>
           <RoundedBox args={[0.7, 0.7, 0.02]} radius={0.08} smoothness={2}>
-            <meshStandardMaterial color="#e11d48" roughness={0.2} metalness={0.5} />
+            <meshStandardMaterial color="#509BEC" roughness={0.2} metalness={0.5} />
           </RoundedBox>
           <Text
             position={[0, 0.12, 0.02]}
@@ -131,7 +131,7 @@ function CardMesh({ card, isFlipped, onFlip }: CardMeshProps) {
         <Text
           position={[-1.3, -0.75, 0]}
           fontSize={0.08}
-          color="#fda4af"
+          color="#D1C8B9"
           anchorX="left"
           anchorY="middle"
         >
@@ -285,4 +285,5 @@ export const ThreeDCardCanvas: React.FC<ThreeDCardCanvasProps> = ({ card, onOpen
     </div>
   );
 };
+
 
