@@ -1,4 +1,4 @@
-﻿import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { 
   initializeFirestore, 
   persistentLocalCache, 
@@ -7,14 +7,15 @@ import {
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
-// Firebase configuration using Vite environment variables with graceful fallback
+// Official Firebase configuration for smart-card-hybrid project
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDummyKeyForLocalDemoAndPreviewOnly",
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "akilli-kart-sos.firebaseapp.com",
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "akilli-kart-sos",
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "akilli-kart-sos.appspot.com",
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1234567890",
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1234567890:web:abcdef123456"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyDqbGUrV_DqJqPLlq6hfi7cVRAscJ84iK8",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "smart-card-hybrid.firebaseapp.com",
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "smart-card-hybrid",
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "smart-card-hybrid.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "742440634818",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:742440634818:web:9ef8b40f268ad53bccee5b",
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "G-21ZFS0TQ6P"
 };
 
 // Initialize Firebase App singleton
