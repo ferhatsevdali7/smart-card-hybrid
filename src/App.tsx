@@ -361,249 +361,256 @@ export function App() {
               </div>
 
               {/* Başlıklar / Sekmeler Listesi */}
-              <div className="mt-6 space-y-2.5">
-                <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 px-3 pt-1">
-                  {language === 'tr' ? 'Kartlarım' : 'My Cards'}
-                </div>
+              <div className="mt-6 space-y-4">
+                
+                {/* KARTLARIM Bölümü */}
+                <div>
+                  <div className="text-[11px] font-bold tracking-wider uppercase text-slate-400 px-3 pb-2">
+                    {language === 'tr' ? 'Kartlarım' : 'My Cards'}
+                  </div>
 
-                {/* 1. Sağlık Kartı (Akordiyon / Açılır Başlık) */}
-                <div 
-                  onMouseEnter={() => setExpandedMenuCard('sos')}
-                  className={`rounded-2xl border transition-all overflow-hidden ${
-                    activeTab === 'sos'
-                      ? 'border-[#14798D]/60 bg-[#14798D]/10'
-                      : isDark ? 'border-slate-800/80 bg-slate-950/40' : 'border-slate-200 bg-slate-50'
-                  }`}
-                >
-                  <div 
-                    onClick={() => toggleExpandCard('sos')}
-                    className="w-full flex items-center justify-between p-3.5 cursor-pointer select-none group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center shrink-0">
-                        <ShieldAlert className="w-4 h-4" />
-                      </div>
-                      <div className="text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-xs">{language === 'tr' ? 'Sağlık Kartı' : 'Health Card'}</span>
-                          <span className="text-[10px] bg-rose-500/20 text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded font-mono">112</span>
+                  <div className="space-y-1">
+                    {/* 1. Sağlık Kartı */}
+                    <div>
+                      <div
+                        onClick={() => toggleExpandCard('sos')}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-2xl cursor-pointer select-none transition-all ${
+                          activeTab === 'sos'
+                            ? (isDark ? 'bg-slate-800/80 text-white' : 'bg-slate-100 text-slate-900 font-bold')
+                            : (isDark ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-100 text-slate-700')
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-rose-500/15 text-rose-400 flex items-center justify-center shrink-0">
+                            <ShieldAlert className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs">{language === 'tr' ? 'Sağlık Kartı' : 'Health Card'}</span>
+                              <span className="text-[10px] bg-rose-500/20 text-rose-400 border border-rose-500/30 px-1.5 py-0.2 rounded font-mono">112</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400">{language === 'tr' ? 'Kan grubu, alerji ve acil aramalar' : 'Blood type, allergies & ICE'}</div>
+                          </div>
                         </div>
-                        <div className="text-[10px] text-slate-400">{language === 'tr' ? 'Kan grubu, alerji ve acil aramalar' : 'Blood type, allergies & ICE'}</div>
-                      </div>
-                    </div>
-                    <div className="text-slate-400 group-hover:text-white transition-colors">
-                      {expandedMenuCard === 'sos' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </div>
-                  </div>
-
-                  {/* Sağlık Kartı Alt Başlıkları */}
-                  {expandedMenuCard === 'sos' && (
-                    <div className={`p-2 pt-0 space-y-1 border-t ${isDark ? 'border-slate-800/60' : 'border-slate-200'}`}>
-                      <button
-                        onClick={() => handleNavigateToSubTab('sos', 'details')}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left ${
-                          activeTab === 'sos' && sosSubTab === 'details'
-                            ? 'bg-[#14798D] text-white shadow-sm'
-                            : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                        <span>{language === 'tr' ? 'sağlık kartı bilgisi /düzenle' : 'Health Card Info / Edit'}</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleNavigateToSubTab('sos', 'qr')}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left ${
-                          activeTab === 'sos' && sosSubTab === 'qr'
-                            ? 'bg-[#14798D] text-white shadow-sm'
-                            : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <QrCode className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                        <span>{language === 'tr' ? 'sağlık kartı QR' : 'Health Card QR'}</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleNavigateToSubTab('sos', 'nfc')}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left ${
-                          activeTab === 'sos' && sosSubTab === 'nfc'
-                            ? 'bg-[#14798D] text-white shadow-sm'
-                            : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <Wifi className="w-3.5 h-3.5 text-rose-400 rotate-90 shrink-0" />
-                        <span>{language === 'tr' ? 'sağlık kartı NFC' : 'Health Card NFC'}</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* 2. Sosyal Kart (Akordiyon / Açılır Başlık) */}
-                <div 
-                  onMouseEnter={() => setExpandedMenuCard('personal')}
-                  className={`rounded-2xl border transition-all overflow-hidden ${
-                    activeTab === 'personal'
-                      ? 'border-[#509BEC]/60 bg-[#509BEC]/10'
-                      : isDark ? 'border-slate-800/80 bg-slate-950/40' : 'border-slate-200 bg-slate-50'
-                  }`}
-                >
-                  <div 
-                    onClick={() => toggleExpandCard('personal')}
-                    className="w-full flex items-center justify-between p-3.5 cursor-pointer select-none group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-[#509BEC]/15 text-[#509BEC] flex items-center justify-center shrink-0">
-                        <CreditCard className="w-4 h-4" />
-                      </div>
-                      <div className="text-left">
-                        <div className="font-bold text-xs">{language === 'tr' ? 'Sosyal Kart' : 'Social Card'}</div>
-                        <div className="text-[10px] text-slate-400">{language === 'tr' ? '30 sn süreli güvenli pano & kartvizit' : 'Timed clipboard & business card'}</div>
-                      </div>
-                    </div>
-                    <div className="text-slate-400 group-hover:text-white transition-colors">
-                      {expandedMenuCard === 'personal' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </div>
-                  </div>
-
-                  {/* Sosyal Kart Alt Başlıkları */}
-                  {expandedMenuCard === 'personal' && (
-                    <div className={`p-2 pt-0 space-y-1 border-t ${isDark ? 'border-slate-800/60' : 'border-slate-200'}`}>
-                      <button
-                        onClick={() => handleNavigateToSubTab('personal', 'details')}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left ${
-                          activeTab === 'personal' && personalSubTab === 'details'
-                            ? 'bg-[#509BEC] text-white shadow-sm'
-                            : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <CreditCard className="w-3.5 h-3.5 text-[#509BEC] shrink-0" />
-                        <span>{language === 'tr' ? 'sosyal kart bilgileri/ düzenle' : 'Social Card Info / Edit'}</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleNavigateToSubTab('personal', 'qr')}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left ${
-                          activeTab === 'personal' && personalSubTab === 'qr'
-                            ? 'bg-[#509BEC] text-white shadow-sm'
-                            : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <QrCode className="w-3.5 h-3.5 text-[#509BEC] shrink-0" />
-                        <span>{language === 'tr' ? 'sosyal kart QR' : 'Social Card QR'}</span>
-                      </button>
-
-                      <button
-                        onClick={() => handleNavigateToSubTab('personal', 'nfc')}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left ${
-                          activeTab === 'personal' && personalSubTab === 'nfc'
-                            ? 'bg-[#509BEC] text-white shadow-sm'
-                            : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <Wifi className="w-3.5 h-3.5 text-[#509BEC] rotate-90 shrink-0" />
-                        <span>{language === 'tr' ? 'sosyal kart NFC' : 'Social Card NFC'}</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* 3. Araç Kartı (Akordiyon / Açılır Başlık) */}
-                <div 
-                  onMouseEnter={() => setExpandedMenuCard('vehicle')}
-                  className={`rounded-2xl border transition-all overflow-hidden ${
-                    activeTab === 'vehicle'
-                      ? 'border-amber-500/60 bg-amber-500/10'
-                      : isDark ? 'border-slate-800/80 bg-slate-950/40' : 'border-slate-200 bg-slate-50'
-                  }`}
-                >
-                  <div 
-                    onClick={() => toggleExpandCard('vehicle')}
-                    className="w-full flex items-center justify-between p-3.5 cursor-pointer select-none group"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
-                        <CarFront className="w-4 h-4" />
-                      </div>
-                      <div className="text-left">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-xs">{language === 'tr' ? 'Araç Kartı' : 'Vehicle Card'}</span>
-                          <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono">🚗</span>
+                        <div className="text-slate-400 px-1">
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expandedMenuCard === 'sos' ? 'rotate-180 text-[#14798D]' : ''}`} />
                         </div>
-                        <div className="text-[10px] text-slate-400">{language === 'tr' ? 'Plaka, park notu ve sürücü bildirimi' : 'Plate number, parking ID & contacts'}</div>
                       </div>
-                    </div>
-                    <div className="text-slate-400 group-hover:text-white transition-colors">
-                      {expandedMenuCard === 'vehicle' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    </div>
-                  </div>
 
-                  {/* Araç Kartı Alt Başlıkları */}
-                  {expandedMenuCard === 'vehicle' && (
-                    <div className={`p-2 pt-0 space-y-1 border-t ${isDark ? 'border-slate-800/60' : 'border-slate-200'}`}>
-                      <button
-                        onClick={() => handleNavigateToSubTab('vehicle', 'details')}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left ${
-                          activeTab === 'vehicle' && vehicleSubTab === 'details'
-                            ? 'bg-amber-600 text-white shadow-sm'
-                            : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
+                      {/* Sağlık Kartı Alt Başlıkları */}
+                      {expandedMenuCard === 'sos' && (
+                        <div className="pl-4 ml-4 my-1.5 border-l-2 border-rose-500/20 space-y-1">
+                          <button
+                            onClick={() => handleNavigateToSubTab('sos', 'details')}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all text-left ${
+                              activeTab === 'sos' && sosSubTab === 'details'
+                                ? 'bg-[#14798D] text-white font-bold shadow-sm'
+                                : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <ShieldAlert className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                            <span>{language === 'tr' ? 'sağlık kartı bilgisi /düzenle' : 'Health Card Info / Edit'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleNavigateToSubTab('sos', 'qr')}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all text-left ${
+                              activeTab === 'sos' && sosSubTab === 'qr'
+                                ? 'bg-[#14798D] text-white font-bold shadow-sm'
+                                : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <QrCode className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                            <span>{language === 'tr' ? 'sağlık kartı QR' : 'Health Card QR'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleNavigateToSubTab('sos', 'nfc')}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all text-left ${
+                              activeTab === 'sos' && sosSubTab === 'nfc'
+                                ? 'bg-[#14798D] text-white font-bold shadow-sm'
+                                : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <Wifi className="w-3.5 h-3.5 text-rose-400 rotate-90 shrink-0" />
+                            <span>{language === 'tr' ? 'sağlık kartı NFC' : 'Health Card NFC'}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 2. Sosyal Kart */}
+                    <div>
+                      <div
+                        onClick={() => toggleExpandCard('personal')}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-2xl cursor-pointer select-none transition-all ${
+                          activeTab === 'personal'
+                            ? (isDark ? 'bg-slate-800/80 text-white' : 'bg-slate-100 text-slate-900 font-bold')
+                            : (isDark ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-100 text-slate-700')
                         }`}
                       >
-                        <CarFront className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span>{language === 'tr' ? 'araç kartı bilgileri/ düzele' : 'Vehicle Card Info / Edit'}</span>
-                      </button>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-[#509BEC]/15 text-[#509BEC] flex items-center justify-center shrink-0">
+                            <CreditCard className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="font-bold text-xs">{language === 'tr' ? 'Sosyal Kart' : 'Social Card'}</div>
+                            <div className="text-[10px] text-slate-400">{language === 'tr' ? '30 sn süreli güvenli pano & kartvizit' : 'Timed clipboard & business card'}</div>
+                          </div>
+                        </div>
+                        <div className="text-slate-400 px-1">
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expandedMenuCard === 'personal' ? 'rotate-180 text-[#509BEC]' : ''}`} />
+                        </div>
+                      </div>
 
-                      <button
-                        onClick={() => handleNavigateToSubTab('vehicle', 'qr')}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all text-left ${
-                          activeTab === 'vehicle' && vehicleSubTab === 'qr'
-                            ? 'bg-amber-600 text-white shadow-sm'
-                            : isDark ? 'hover:bg-slate-800 text-slate-300' : 'hover:bg-slate-200 text-slate-700'
+                      {/* Sosyal Kart Alt Başlıkları */}
+                      {expandedMenuCard === 'personal' && (
+                        <div className="pl-4 ml-4 my-1.5 border-l-2 border-[#509BEC]/20 space-y-1">
+                          <button
+                            onClick={() => handleNavigateToSubTab('personal', 'details')}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all text-left ${
+                              activeTab === 'personal' && personalSubTab === 'details'
+                                ? 'bg-[#509BEC] text-white font-bold shadow-sm'
+                                : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <CreditCard className="w-3.5 h-3.5 text-[#509BEC] shrink-0" />
+                            <span>{language === 'tr' ? 'sosyal kart bilgileri/ düzenle' : 'Social Card Info / Edit'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleNavigateToSubTab('personal', 'qr')}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all text-left ${
+                              activeTab === 'personal' && personalSubTab === 'qr'
+                                ? 'bg-[#509BEC] text-white font-bold shadow-sm'
+                                : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <QrCode className="w-3.5 h-3.5 text-[#509BEC] shrink-0" />
+                            <span>{language === 'tr' ? 'sosyal kart QR' : 'Social Card QR'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleNavigateToSubTab('personal', 'nfc')}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all text-left ${
+                              activeTab === 'personal' && personalSubTab === 'nfc'
+                                ? 'bg-[#509BEC] text-white font-bold shadow-sm'
+                                : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <Wifi className="w-3.5 h-3.5 text-[#509BEC] rotate-90 shrink-0" />
+                            <span>{language === 'tr' ? 'sosyal kart NFC' : 'Social Card NFC'}</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 3. Araç Kartı */}
+                    <div>
+                      <div
+                        onClick={() => toggleExpandCard('vehicle')}
+                        className={`w-full flex items-center justify-between p-2.5 rounded-2xl cursor-pointer select-none transition-all ${
+                          activeTab === 'vehicle'
+                            ? (isDark ? 'bg-slate-800/80 text-white' : 'bg-slate-100 text-slate-900 font-bold')
+                            : (isDark ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-100 text-slate-700')
                         }`}
                       >
-                        <QrCode className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                        <span>{language === 'tr' ? 'araç kart QR' : 'Vehicle Card QR'}</span>
-                      </button>
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center shrink-0">
+                            <CarFront className="w-4 h-4" />
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xs">{language === 'tr' ? 'Araç Kartı' : 'Vehicle Card'}</span>
+                              <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.2 rounded font-mono">🚗</span>
+                            </div>
+                            <div className="text-[10px] text-slate-400">{language === 'tr' ? 'Plaka, park notu ve sürücü bildirimi' : 'Plate number, parking ID & contacts'}</div>
+                          </div>
+                        </div>
+                        <div className="text-slate-400 px-1">
+                          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${expandedMenuCard === 'vehicle' ? 'rotate-180 text-amber-400' : ''}`} />
+                        </div>
+                      </div>
+
+                      {/* Araç Kartı Alt Başlıkları */}
+                      {expandedMenuCard === 'vehicle' && (
+                        <div className="pl-4 ml-4 my-1.5 border-l-2 border-amber-500/20 space-y-1">
+                          <button
+                            onClick={() => handleNavigateToSubTab('vehicle', 'details')}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all text-left ${
+                              activeTab === 'vehicle' && vehicleSubTab === 'details'
+                                ? 'bg-amber-600 text-white font-bold shadow-sm'
+                                : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <CarFront className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>{language === 'tr' ? 'araç kartı bilgileri/ düzele' : 'Vehicle Card Info / Edit'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleNavigateToSubTab('vehicle', 'qr')}
+                            className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs transition-all text-left ${
+                              activeTab === 'vehicle' && vehicleSubTab === 'qr'
+                                ? 'bg-amber-600 text-white font-bold shadow-sm'
+                                : isDark ? 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+                            }`}
+                          >
+                            <QrCode className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                            <span>{language === 'tr' ? 'araç kart QR' : 'Vehicle Card QR'}</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
 
-                <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 px-3 pt-3">
-                  {language === 'tr' ? 'Destek & Yasal' : 'Support & Legal'}
+                {/* DESTEK & YASAL Bölümü */}
+                <div className="pt-2">
+                  <div className="text-[11px] font-bold tracking-wider uppercase text-slate-400 px-3 pb-2">
+                    {language === 'tr' ? 'Destek & Yasal' : 'Support & Legal'}
+                  </div>
+
+                  <div className="space-y-1">
+                    {/* 4. Yardım & SSS */}
+                    <button
+                      onClick={() => {
+                        setIsDrawerOpen(false);
+                        setIsHelpModalOpen(true);
+                      }}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-xs font-semibold transition-all text-left ${
+                        isDark ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-cyan-500/15 text-cyan-400 flex items-center justify-center shrink-0">
+                        <HelpCircle className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold">{language === 'tr' ? 'Yardım & SSS' : 'Help & FAQ'}</div>
+                        <div className="text-[10px] text-slate-400">{language === 'tr' ? 'NFC kullanımı, SOS ve sık sorulanlar' : 'NFC guide, emergency & questions'}</div>
+                      </div>
+                    </button>
+
+                    {/* 5. Gizlilik & KVKK */}
+                    <button
+                      onClick={() => {
+                        setIsDrawerOpen(false);
+                        setIsPrivacyModalOpen(true);
+                      }}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-xs font-semibold transition-all text-left ${
+                        isDark ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold">{language === 'tr' ? 'Gizlilik & KVKK' : 'Privacy & KVKK'}</div>
+                        <div className="text-[10px] text-slate-400">{language === 'tr' ? 'Veri güvenliği ve aydınlatma metni' : 'Data protection & user rights'}</div>
+                      </div>
+                    </button>
+                  </div>
                 </div>
 
-                {/* 4. Yardım & SSS */}
-                <button
-                  onClick={() => {
-                    setIsDrawerOpen(false);
-                    setIsHelpModalOpen(true);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-semibold transition-all text-left border ${
-                    isDark ? 'bg-slate-950/40 border-slate-800/80 hover:bg-slate-800 text-slate-200' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
-                  }`}
-                >
-                  <HelpCircle className="w-4 h-4 text-cyan-400 shrink-0" />
-                  <div>
-                    <div className="font-bold">{language === 'tr' ? 'Yardım & SSS' : 'Help & FAQ'}</div>
-                    <div className="text-[10px] text-slate-400">{language === 'tr' ? 'NFC kullanımı, SOS ve sık sorulanlar' : 'NFC guide, emergency & questions'}</div>
-                  </div>
-                </button>
-
-                {/* 5. Gizlilik & KVKK */}
-                <button
-                  onClick={() => {
-                    setIsDrawerOpen(false);
-                    setIsPrivacyModalOpen(true);
-                  }}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-xs font-semibold transition-all text-left border ${
-                    isDark ? 'bg-slate-950/40 border-slate-800/80 hover:bg-slate-800 text-slate-200' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
-                  }`}
-                >
-                  <FileText className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <div>
-                    <div className="font-bold">{language === 'tr' ? 'Gizlilik & KVKK' : 'Privacy & KVKK'}</div>
-                    <div className="text-[10px] text-slate-400">{language === 'tr' ? 'Veri güvenliği ve aydınlatma metni' : 'Data protection & user rights'}</div>
-                  </div>
-                </button>
               </div>
             </div>
 
