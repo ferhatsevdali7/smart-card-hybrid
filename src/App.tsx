@@ -2,10 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, CreditCard, LayoutDashboard, QrCode, KeyRound, 
   Globe, Sun, Moon, LogIn, LogOut, User as UserIcon, Home, Menu, X, CarFront,
-  HelpCircle, FileText, ChevronDown, ChevronUp, ChevronRight, Wifi, Sparkles, Edit3
+  HelpCircle, FileText, ChevronDown, ChevronUp, ChevronRight, Wifi, Sparkles, Edit3,
+  Download, Smartphone, AlertCircle
 } from 'lucide-react';
 import { SmartCard, MedicalInfo, PersonalInfo, VehicleInfo } from './types/card';
-import { getStoredCardData, clearStoredCardData, DEMO_CARD_DATA } from './lib/storage';
+import { getStoredCardData, saveStoredCardData, clearStoredCardData, DEMO_CARD_DATA } from './lib/storage';
 import { LandingHeroView } from './components/LandingHeroView';
 import { MedicalSOSView } from './components/MedicalSOSView';
 import { PersonalCardView } from './components/PersonalCardView';
@@ -29,12 +30,17 @@ type PersonalSubTab = 'details' | 'qr' | 'nfc';
 type VehicleSubTab = 'details' | 'qr';
 
 export function App() {
-  const [card, setCard] = useState<SmartCard>(DEMO_CARD_DATA);
+  const [card, setCard] = useState<SmartCard>(() => {
+    return getStoredCardData() || DEMO_CARD_DATA;
+  });
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [sosSubTab, setSosSubTab] = useState<SosSubTab>('details');
   const [personalSubTab, setPersonalSubTab] = useState<PersonalSubTab>('details');
   const [vehicleSubTab, setVehicleSubTab] = useState<VehicleSubTab>('details');
   const [expandedMenuCard, setExpandedMenuCard] = useState<'sos' | 'personal' | 'vehicle' | null>('sos');
+
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
 
   const [isPublicScan, setIsPublicScan] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -50,7 +56,27 @@ export function App() {
     return (localStorage.getItem('smart_card_theme') as ThemeMode) || 'dark';
   });
 
-  // Track Firebase Auth State & Bind User Cards
+  // Track Network Online/Offline & PWA Install Prompt
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  // Track Firebase Auth State & Bind User Cards with Local Cache Persistence
   useEffect(() => {
     const unsubscribe = subscribeToAuth(async (currentUser) => {
       setUser(currentUser);
@@ -59,6 +85,7 @@ export function App() {
         const userCard = await fetchUserCard(currentUser.uid);
         if (userCard) {
           setCard(userCard);
+          saveStoredCardData(userCard);
         } else {
           // Initialize user's card if none exists
           const customId = `CARD-${currentUser.uid.slice(0, 6).toUpperCase()}`;
@@ -78,11 +105,12 @@ export function App() {
           };
           await saveCardToFirestore(initialUserCard, currentUser.uid);
           setCard(initialUserCard);
+          saveStoredCardData(initialUserCard);
         }
       } else {
         // When not logged in and no ?id in URL, reset to safe demo
         const params = new URLSearchParams(window.location.search);
-        if (!params.get('id')) {
+        if (!params.get('id') && navigator.onLine) {
           setCard(DEMO_CARD_DATA);
         }
       }
@@ -111,11 +139,13 @@ export function App() {
       fetchCardFromFirestore(id).then((loadedCard) => {
         if (loadedCard) {
           setCard(loadedCard);
+          saveStoredCardData(loadedCard);
         }
       });
 
       const unsubscribeCard = listenToCardUpdates(id, (updatedCard) => {
         setCard(updatedCard);
+        saveStoredCardData(updatedCard);
       });
 
       return () => {
@@ -171,11 +201,27 @@ export function App() {
     setIsAccountModalOpen(false);
   };
 
-  // Decentralized in-page update handlers
+  const handleInstallApp = async () => {
+    if (installPrompt) {
+      installPrompt.prompt();
+      const choiceResult = await installPrompt.userChoice;
+      if (choiceResult.outcome === 'accepted') {
+        setInstallPrompt(null);
+      }
+    } else {
+      alert(language === 'tr' 
+        ? 'iOS (iPhone) için: Safari alt menüsündeki "Paylaş" butonuna basıp "Ana Ekrana Ekle"yi seçiniz.' 
+        : 'For iOS (iPhone): Tap "Share" icon in Safari and select "Add to Home Screen".'
+      );
+    }
+  };
+
+  // Decentralized in-page update handlers with offline local storage sync
   const handleUpdateMedical = async (updatedMed: MedicalInfo) => {
     const updated = { ...card, medical: updatedMed };
     setCard(updated);
-    if (user) {
+    saveStoredCardData(updated);
+    if (user && navigator.onLine) {
       await saveCardToFirestore(updated, user.uid);
     }
   };
@@ -183,7 +229,8 @@ export function App() {
   const handleUpdatePersonal = async (updatedPers: PersonalInfo) => {
     const updated = { ...card, personal: updatedPers };
     setCard(updated);
-    if (user) {
+    saveStoredCardData(updated);
+    if (user && navigator.onLine) {
       await saveCardToFirestore(updated, user.uid);
     }
   };
@@ -191,7 +238,8 @@ export function App() {
   const handleUpdateVehicle = async (updatedVeh: VehicleInfo) => {
     const updated = { ...card, vehicle: updatedVeh };
     setCard(updated);
-    if (user) {
+    saveStoredCardData(updated);
+    if (user && navigator.onLine) {
       await saveCardToFirestore(updated, user.uid);
     }
   };
@@ -206,6 +254,15 @@ export function App() {
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col font-sans transition-colors duration-200 relative`}>
+      
+      {/* Offline Status Alert Banner */}
+      {isOffline && (
+        <div className="bg-amber-500/20 border-b border-amber-500/40 text-amber-300 px-4 py-2 text-center text-xs font-bold flex items-center justify-center gap-2 backdrop-blur-md sticky top-0 z-50">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping"></span>
+          <span>{language === 'tr' ? '⚡ Çevrimdışı Acil Durum Modu (İnternetsiz Cihaz Hafızasından Yüklendi)' : '⚡ Offline Emergency Mode (Loaded from Device Cache)'}</span>
+        </div>
+      )}
+
       {/* Top Navbar */}
       <header className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white/95 border-slate-200 shadow-sm'} border-b sticky top-0 z-40 backdrop-blur-md transition-colors`}>
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
@@ -564,13 +621,29 @@ export function App() {
                   </div>
                 </div>
 
-                {/* DESTEK & YASAL Bölümü */}
+                {/* DESTEK, YASAL & PWA YÜKLE Bölümü */}
                 <div className="pt-2">
                   <div className="text-[11px] font-bold tracking-wider uppercase text-slate-400 px-3 pb-2">
                     {language === 'tr' ? 'Destek & Yasal' : 'Support & Legal'}
                   </div>
 
                   <div className="space-y-1">
+                    {/* PWA Ana Ekrana Yükle Butonu */}
+                    <button
+                      onClick={handleInstallApp}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-xs font-semibold transition-all text-left ${
+                        isDark ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center shrink-0">
+                        <Download className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold">{language === 'tr' ? 'Ana Ekrana Ekle / Yükle' : 'Add to Home Screen (PWA)'}</div>
+                        <div className="text-[10px] text-slate-400">{language === 'tr' ? 'İnternetsiz tam ekran mobil uygulama' : 'Offline full-screen mobile app'}</div>
+                      </div>
+                    </button>
+
                     {/* 4. Yardım & SSS */}
                     <button
                       onClick={() => {
@@ -617,7 +690,7 @@ export function App() {
             {/* Menü Altı Bilgi & Sürüm */}
             <div className="pt-6 border-t border-slate-700/40 text-center">
               <p className="text-xs text-slate-400">
-                {language === 'tr' ? 'Smart Hybrid Card v2.5 • Güvenli Ekosistem' : 'Smart Hybrid Card v2.5 • Secure Ecosystem'}
+                {language === 'tr' ? 'Smart Hybrid Card v2.5 • PWA Çevrimdışı Korumalı' : 'Smart Hybrid Card v2.5 • PWA Offline Protected'}
               </p>
             </div>
 
@@ -670,8 +743,8 @@ export function App() {
 
         {activeTab === 'sos' && (
           <MedicalSOSView 
-            medical={(user || isPublicScan) ? card.medical : DEMO_CARD_DATA.medical} 
-            cardId={(user || isPublicScan) ? card.cardId : DEMO_CARD_DATA.cardId} 
+            medical={(user || isPublicScan || isOffline) ? card.medical : DEMO_CARD_DATA.medical} 
+            cardId={(user || isPublicScan || isOffline) ? card.cardId : DEMO_CARD_DATA.cardId} 
             lang={language}
             theme={theme}
             isPublicScan={isPublicScan}
@@ -685,8 +758,8 @@ export function App() {
 
         {activeTab === 'personal' && (
           <PersonalCardView 
-            personal={(user || isPublicScan) ? card.personal : DEMO_CARD_DATA.personal} 
-            cardId={(user || isPublicScan) ? card.cardId : DEMO_CARD_DATA.cardId} 
+            personal={(user || isPublicScan || isOffline) ? card.personal : DEMO_CARD_DATA.personal} 
+            cardId={(user || isPublicScan || isOffline) ? card.cardId : DEMO_CARD_DATA.cardId} 
             lang={language}
             theme={theme}
             isPublicScan={isPublicScan}
@@ -700,8 +773,8 @@ export function App() {
 
         {activeTab === 'vehicle' && (
           <VehicleCardView 
-            vehicle={(user || isPublicScan) ? (card.vehicle || DEMO_CARD_DATA.vehicle) : DEMO_CARD_DATA.vehicle}
-            cardId={(user || isPublicScan) ? card.cardId : DEMO_CARD_DATA.cardId} 
+            vehicle={(user || isPublicScan || isOffline) ? (card.vehicle || DEMO_CARD_DATA.vehicle) : DEMO_CARD_DATA.vehicle}
+            cardId={(user || isPublicScan || isOffline) ? card.cardId : DEMO_CARD_DATA.cardId} 
             lang={language}
             theme={theme}
             isPublicScan={isPublicScan}
@@ -725,7 +798,10 @@ export function App() {
         {activeTab === 'dashboard' && (
           <DashboardView 
             card={card} 
-            onUpdate={(updated) => setCard(updated)} 
+            onUpdate={(updated) => {
+              setCard(updated);
+              saveStoredCardData(updated);
+            }} 
             lang={language}
             theme={theme}
             user={user}

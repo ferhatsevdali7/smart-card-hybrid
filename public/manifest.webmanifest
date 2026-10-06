@@ -1,8 +1,9 @@
-﻿{
-  "name": "Hibrit Akıllı Kart (Medical SOS + Card)",
+{
+  "name": "Hibrit Akıllı Kart",
   "short_name": "Akıllı Kart",
-  "description": "Medikal Acil Durum SOS ve Güvenli Dijital Kartvizit",
+  "description": "Acil Medikal Sağlık Profili, Güvenli Sosyal Kartvizit ve Dijital Araç Kartı",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#020617",
   "theme_color": "#14798D",
@@ -13,6 +14,29 @@
       "sizes": "192x192 512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Sağlık Kartı (112)",
+      "short_name": "Sağlık",
+      "description": "Acil Durum Sağlık ve Kan Grubu Profili",
+      "url": "/?view=sos",
+      "icons": [{ "src": "/favicon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Sosyal Kartvizit",
+      "short_name": "Kartvizit",
+      "description": "Dijital Kartvizit ve IBAN Paylaşımı",
+      "url": "/?view=personal",
+      "icons": [{ "src": "/favicon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Araç Kartı",
+      "short_name": "Araç",
+      "description": "Araç Plaka ve Park İletişimi",
+      "url": "/?view=vehicle",
+      "icons": [{ "src": "/favicon.svg", "sizes": "192x192" }]
     }
   ]
 }
