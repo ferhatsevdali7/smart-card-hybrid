@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ShieldAlert, CreditCard, LayoutDashboard, QrCode, Smartphone, KeyRound, 
-  Globe, Sun, Moon, LogIn, LogOut, User as UserIcon, Home, Menu, X 
+  ShieldAlert, CreditCard, LayoutDashboard, QrCode, KeyRound, 
+  Globe, Sun, Moon, LogIn, LogOut, User as UserIcon, Home, Menu, X, CarFront 
 } from 'lucide-react';
 import { SmartCard } from './types/card';
 import { getStoredCardData, clearStoredCardData, DEMO_CARD_DATA } from './lib/storage';
 import { LandingHeroView } from './components/LandingHeroView';
 import { MedicalSOSView } from './components/MedicalSOSView';
 import { PersonalCardView } from './components/PersonalCardView';
+import { VehicleCardView } from './components/VehicleCardView';
 import { DashboardView } from './components/DashboardView';
-import { CardSimulatorView } from './components/CardSimulatorView';
 import { QrCodeExporter } from './components/QrCodeExporter';
 import { NfcPayloadHelper } from './components/NfcPayloadHelper';
 import { CryptoVaultView } from './components/CryptoVaultView';
@@ -19,7 +19,7 @@ import { fetchCardFromFirestore, fetchUserCard, saveCardToFirestore, listenToCar
 import { User } from 'firebase/auth';
 import { Language, ThemeMode, translations } from './lib/i18n';
 
-type AppTab = 'home' | 'simulator' | 'sos' | 'personal' | 'dashboard' | 'vault' | 'print_nfc';
+type AppTab = 'home' | 'sos' | 'personal' | 'vehicle' | 'dashboard' | 'vault' | 'print_nfc';
 
 export function App() {
   const [card, setCard] = useState<SmartCard>(DEMO_CARD_DATA);
@@ -74,7 +74,7 @@ export function App() {
     return () => unsubscribe();
   }, []);
 
-  // Handle URL Query Routing (?view=sos, ?view=personal, ?id=...)
+  // Handle URL Query Routing (?view=sos, ?view=personal, ?view=vehicle, ?id=...)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const view = params.get('view');
@@ -85,6 +85,9 @@ export function App() {
       setIsPublicScan(true);
     } else if (view === 'personal') {
       setActiveTab('personal');
+      setIsPublicScan(true);
+    } else if (view === 'vehicle') {
+      setActiveTab('vehicle');
       setIsPublicScan(true);
     }
 
@@ -118,7 +121,7 @@ export function App() {
   };
 
   const handleNavigate = (tab: AppTab) => {
-    if (!user && !isPublicScan && tab !== 'home' && tab !== 'simulator') {
+    if (!user && !isPublicScan && tab !== 'home') {
       setIsAuthModalOpen(true);
       setIsDrawerOpen(false);
       return;
@@ -299,21 +302,8 @@ export function App() {
 
               {/* Başlıklar / Sekmeler Listesi */}
               <div className="mt-6 space-y-2">
-                <button
-                  onClick={() => handleNavigate('simulator')}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
-                    activeTab === 'simulator' && !isPublicScan
-                      ? 'bg-[#14798D] text-white shadow-md'
-                      : isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
-                  }`}
-                >
-                  <Smartphone className="w-5 h-5 text-[#509BEC]" />
-                  <div>
-                    <div>{language === 'tr' ? '3D Kart Simülatörü' : '3D Card Simulator'}</div>
-                    <div className="text-[11px] opacity-70">{language === 'tr' ? 'İki yüzlü interaktif kart görünümü' : 'Dual-sided interactive preview'}</div>
-                  </div>
-                </button>
-
+                
+                {/* 1. Sağlık Kartı */}
                 <button
                   onClick={() => handleNavigate('sos')}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
@@ -325,13 +315,14 @@ export function App() {
                   <ShieldAlert className="w-5 h-5 text-rose-500" />
                   <div>
                     <div className="flex items-center gap-2">
-                      <span>{language === 'tr' ? 'Acil Medikal SOS' : 'Emergency Medical SOS'}</span>
+                      <span>{language === 'tr' ? 'Sağlık Kartı' : 'Health Card'}</span>
                       <span className="text-[10px] bg-rose-500/20 text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded font-mono">112</span>
                     </div>
                     <div className="text-[11px] opacity-70">{language === 'tr' ? 'Kan grubu, alerji ve acil aramalar' : 'Blood type, allergies & ICE'}</div>
                   </div>
                 </button>
 
+                {/* 2. Sosyal Kart */}
                 <button
                   onClick={() => handleNavigate('personal')}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
@@ -342,11 +333,31 @@ export function App() {
                 >
                   <CreditCard className="w-5 h-5 text-[#D1C8B9]" />
                   <div>
-                    <div>{language === 'tr' ? 'Kişisel Kartvizit' : 'Personal Business Card'}</div>
-                    <div className="text-[11px] opacity-70">{language === 'tr' ? '30 sn süreli güvenli pano & iletişim' : 'Timed clipboard & contact info'}</div>
+                    <div>{language === 'tr' ? 'Sosyal Kart' : 'Social Card'}</div>
+                    <div className="text-[11px] opacity-70">{language === 'tr' ? '30 sn süreli güvenli pano & kartvizit' : 'Timed clipboard & business card'}</div>
                   </div>
                 </button>
 
+                {/* 3. Araç Kartı (YENİ) */}
+                <button
+                  onClick={() => handleNavigate('vehicle')}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
+                    activeTab === 'vehicle'
+                      ? 'bg-amber-600 text-white shadow-md'
+                      : isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  <CarFront className="w-5 h-5 text-amber-400" />
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span>{language === 'tr' ? 'Araç Kartı' : 'Vehicle Card'}</span>
+                      <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/30 px-1.5 py-0.5 rounded font-mono">🚗</span>
+                    </div>
+                    <div className="text-[11px] opacity-70">{language === 'tr' ? 'Plaka, park notu ve sürücü bildirimi' : 'Plate number, parking ID & contacts'}</div>
+                  </div>
+                </button>
+
+                {/* 4. Kripto Kasa */}
                 <button
                   onClick={() => handleNavigate('vault')}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
@@ -362,6 +373,7 @@ export function App() {
                   </div>
                 </button>
 
+                {/* 5. Yönetim Paneli */}
                 <button
                   onClick={() => handleNavigate('dashboard')}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
@@ -379,6 +391,7 @@ export function App() {
                   </div>
                 </button>
 
+                {/* 6. QR & NFC Baskı Merkezi */}
                 <button
                   onClick={() => handleNavigate('print_nfc')}
                   className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
@@ -445,19 +458,8 @@ export function App() {
             lang={language}
             theme={theme}
             onOpenAuth={() => setIsAuthModalOpen(true)}
-            onOpenSimulator={() => { setIsPublicScan(false); setActiveTab('simulator'); }}
             onOpenDemoSOS={() => { setIsPublicScan(false); setActiveTab('sos'); }}
             onOpenDemoPersonal={() => { setIsPublicScan(false); setActiveTab('personal'); }}
-          />
-        )}
-
-        {activeTab === 'simulator' && (
-          <CardSimulatorView 
-            card={user ? card : DEMO_CARD_DATA} 
-            onOpenSOS={() => { setIsPublicScan(true); setActiveTab('sos'); }}
-            onOpenPersonal={() => { setIsPublicScan(true); setActiveTab('personal'); }}
-            lang={language}
-            theme={theme}
           />
         )}
 
@@ -475,6 +477,16 @@ export function App() {
         {activeTab === 'personal' && (
           <PersonalCardView 
             personal={(user || isPublicScan) ? card.personal : DEMO_CARD_DATA.personal} 
+            cardId={(user || isPublicScan) ? card.cardId : DEMO_CARD_DATA.cardId} 
+            lang={language}
+            theme={theme}
+            isPublicScan={isPublicScan}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
+          />
+        )}
+
+        {activeTab === 'vehicle' && (
+          <VehicleCardView 
             cardId={(user || isPublicScan) ? card.cardId : DEMO_CARD_DATA.cardId} 
             lang={language}
             theme={theme}
@@ -528,5 +540,6 @@ export function App() {
 }
 
 export default App;
+
 
 
