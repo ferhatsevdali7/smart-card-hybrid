@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   User, Mail, Shield, Key, LogOut, X, 
   Calendar, Check, AlertCircle, RefreshCw 
@@ -31,13 +31,19 @@ export const AccountProfileModal: React.FC<AccountProfileModalProps> = ({
   const [isUpdating, setIsUpdating] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
+  useEffect(() => {
+    if (user?.displayName) {
+      setDisplayName(user.displayName);
+    }
+  }, [user]);
+
   const handleUpdateName = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!displayName.trim()) return;
     setIsUpdating(true);
     setStatusMessage(null);
     try {
-      await updateProfile(user, { displayName });
+      await updateProfile(user, { displayName: displayName.trim() });
       setStatusMessage({ 
         text: lang === 'tr' ? 'Profil adı başarıyla güncellendi!' : 'Profile name updated successfully!', 
         type: 'success' 
@@ -69,13 +75,25 @@ export const AccountProfileModal: React.FC<AccountProfileModalProps> = ({
     }
   };
 
-  const creationDate = user.metadata?.creationTime 
-    ? new Date(user.metadata.creationTime).toLocaleDateString(lang === 'tr' ? 'tr-TR' : 'en-US', { dateStyle: 'medium' }) 
-    : '-';
+  const getCreationDate = () => {
+    try {
+      if (!user.metadata?.creationTime) return '-';
+      const d = new Date(user.metadata.creationTime);
+      return isNaN(d.getTime()) ? '-' : d.toLocaleDateString(lang === 'tr' ? 'tr-TR' : 'en-US');
+    } catch {
+      return '-';
+    }
+  };
 
-  const lastSignIn = user.metadata?.lastSignInTime 
-    ? new Date(user.metadata.lastSignInTime).toLocaleDateString(lang === 'tr' ? 'tr-TR' : 'en-US', { dateStyle: 'medium', timeStyle: 'short' }) 
-    : '-';
+  const getLastSignIn = () => {
+    try {
+      if (!user.metadata?.lastSignInTime) return '-';
+      const d = new Date(user.metadata.lastSignInTime);
+      return isNaN(d.getTime()) ? '-' : d.toLocaleString(lang === 'tr' ? 'tr-TR' : 'en-US');
+    } catch {
+      return '-';
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -93,14 +111,14 @@ export const AccountProfileModal: React.FC<AccountProfileModalProps> = ({
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#14798D] to-[#509BEC] flex items-center justify-center text-white font-bold shadow">
               {user.photoURL ? (
-                <img src={user.photoURL} alt={displayName} className="w-full h-full rounded-2xl object-cover" />
+                <img src={user.photoURL} alt={displayName || 'User'} className="w-full h-full rounded-2xl object-cover" />
               ) : (
                 <User className="w-5 h-5" />
               )}
             </div>
             <div>
               <h3 className="font-bold text-base">{lang === 'tr' ? 'Hesap & Profil Ayarları' : 'Account & Profile Settings'}</h3>
-              <p className="text-xs text-slate-400">{user.email}</p>
+              <p className="text-xs text-slate-400">{user.email || (lang === 'tr' ? 'Giriş Yapıldı' : 'Signed In')}</p>
             </div>
           </div>
           <button 
@@ -182,11 +200,11 @@ export const AccountProfileModal: React.FC<AccountProfileModalProps> = ({
             </div>
             <div className="flex items-center justify-between">
               <span>{lang === 'tr' ? 'Kayıt Tarihi:' : 'Joined:'}</span>
-              <span className="text-slate-300">{creationDate}</span>
+              <span className="text-slate-300">{getCreationDate()}</span>
             </div>
             <div className="flex items-center justify-between">
               <span>{lang === 'tr' ? 'Son Oturum:' : 'Last Sign-in:'}</span>
-              <span className="text-slate-300">{lastSignIn}</span>
+              <span className="text-slate-300">{getLastSignIn()}</span>
             </div>
           </div>
         </div>
