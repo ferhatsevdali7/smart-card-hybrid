@@ -17,6 +17,8 @@ interface VehicleCardViewProps {
   onOpenAuth?: () => void;
   onUpdateVehicle?: (updated: VehicleInfo) => void;
   isOwner?: boolean;
+  subTab?: SubTab;
+  onSubTabChange?: (tab: SubTab) => void;
 }
 
 const DEFAULT_VEHICLE: VehicleInfo = {
@@ -29,7 +31,7 @@ const DEFAULT_VEHICLE: VehicleInfo = {
   insuranceStatus: 'Aktif Kasko & Trafik Sigortası'
 };
 
-type SubTab = 'details' | 'qr';
+export type SubTab = 'details' | 'qr';
 
 export const VehicleCardView: React.FC<VehicleCardViewProps> = ({
   cardId = 'DEMO-749123',
@@ -39,10 +41,26 @@ export const VehicleCardView: React.FC<VehicleCardViewProps> = ({
   isPublicScan = false,
   onOpenAuth,
   onUpdateVehicle,
-  isOwner = false
+  isOwner = false,
+  subTab = 'details',
+  onSubTabChange
 }) => {
   const isDark = theme === 'dark';
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('details');
+  const [internalSubTab, setInternalSubTab] = useState<SubTab>(subTab);
+
+  React.useEffect(() => {
+    if (subTab) {
+      setInternalSubTab(subTab);
+    }
+  }, [subTab]);
+
+  const activeSubTab = subTab || internalSubTab;
+  const handleSelectSubTab = (tab: SubTab) => {
+    setInternalSubTab(tab);
+    if (onSubTabChange) {
+      onSubTabChange(tab);
+    }
+  };
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -76,7 +94,7 @@ export const VehicleCardView: React.FC<VehicleCardViewProps> = ({
       {/* Responsive Sub-Tabs Navigation */}
       <div className={`flex p-1.5 rounded-2xl border ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} gap-1 text-xs font-bold`}>
         <button
-          onClick={() => setActiveSubTab('details')}
+          onClick={() => handleSelectSubTab('details')}
           className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
             activeSubTab === 'details'
               ? 'bg-amber-600 text-white shadow-md'
@@ -88,7 +106,7 @@ export const VehicleCardView: React.FC<VehicleCardViewProps> = ({
         </button>
 
         <button
-          onClick={() => setActiveSubTab('qr')}
+          onClick={() => handleSelectSubTab('qr')}
           className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
             activeSubTab === 'qr'
               ? 'bg-amber-600 text-white shadow-md'

@@ -19,10 +19,12 @@ interface PersonalCardViewProps {
   onOpenAuth?: () => void;
   onUpdatePersonal?: (updated: PersonalInfo) => void;
   isOwner?: boolean;
+  subTab?: SubTab;
+  onSubTabChange?: (tab: SubTab) => void;
 }
 
 const SESSION_DURATION = 60;
-type SubTab = 'details' | 'qr' | 'nfc';
+export type SubTab = 'details' | 'qr' | 'nfc';
 
 export const PersonalCardView: React.FC<PersonalCardViewProps> = ({ 
   personal, 
@@ -32,9 +34,25 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
   isPublicScan = false,
   onOpenAuth,
   onUpdatePersonal,
-  isOwner = false
+  isOwner = false,
+  subTab = 'details',
+  onSubTabChange
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('details');
+  const [internalSubTab, setInternalSubTab] = useState<SubTab>(subTab);
+
+  useEffect(() => {
+    if (subTab) {
+      setInternalSubTab(subTab);
+    }
+  }, [subTab]);
+
+  const activeSubTab = subTab || internalSubTab;
+  const handleSelectSubTab = (tab: SubTab) => {
+    setInternalSubTab(tab);
+    if (onSubTabChange) {
+      onSubTabChange(tab);
+    }
+  };
   const [timeLeft, setTimeLeft] = useState<number>(SESSION_DURATION);
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [copiedIbanId, setCopiedIbanId] = useState<string | null>(null);
@@ -157,7 +175,7 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
         {/* Responsive Sub-Tabs Navigation */}
         <div className={`flex p-1.5 rounded-2xl border ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} gap-1 text-xs font-bold`}>
           <button
-            onClick={() => setActiveSubTab('details')}
+            onClick={() => handleSelectSubTab('details')}
             className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
               activeSubTab === 'details'
                 ? 'bg-[#509BEC] text-white shadow-md'
@@ -169,7 +187,7 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveSubTab('qr')}
+            onClick={() => handleSelectSubTab('qr')}
             className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
               activeSubTab === 'qr'
                 ? 'bg-[#509BEC] text-white shadow-md'
@@ -181,7 +199,7 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveSubTab('nfc')}
+            onClick={() => handleSelectSubTab('nfc')}
             className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
               activeSubTab === 'nfc'
                 ? 'bg-[#509BEC] text-white shadow-md'

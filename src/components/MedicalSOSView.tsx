@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Heart, AlertTriangle, Phone, ShieldCheck, Pill, 
   Activity, CheckCircle2, User, Copy, Check, Info, FileText, 
@@ -18,13 +18,15 @@ interface MedicalSOSViewProps {
   onOpenAuth?: () => void;
   onUpdateMedical?: (updated: MedicalInfo) => void;
   isOwner?: boolean;
+  subTab?: SubTab;
+  onSubTabChange?: (tab: SubTab) => void;
 }
 
 const BLOOD_TYPES: BloodType[] = [
   '0 Rh+', '0 Rh-', 'A Rh+', 'A Rh-', 'B Rh+', 'B Rh-', 'AB Rh+', 'AB Rh-'
 ];
 
-type SubTab = 'details' | 'qr' | 'nfc';
+export type SubTab = 'details' | 'qr' | 'nfc';
 
 export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ 
   medical, 
@@ -34,9 +36,25 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
   isPublicScan = false,
   onOpenAuth,
   onUpdateMedical,
-  isOwner = false
+  isOwner = false,
+  subTab = 'details',
+  onSubTabChange
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<SubTab>('details');
+  const [internalSubTab, setInternalSubTab] = useState<SubTab>(subTab);
+
+  useEffect(() => {
+    if (subTab) {
+      setInternalSubTab(subTab);
+    }
+  }, [subTab]);
+
+  const activeSubTab = subTab || internalSubTab;
+  const handleSelectSubTab = (tab: SubTab) => {
+    setInternalSubTab(tab);
+    if (onSubTabChange) {
+      onSubTabChange(tab);
+    }
+  };
   const [copied, setCopied] = useState(false);
   const [copiedNfc, setCopiedNfc] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -113,7 +131,7 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
         {/* Responsive Sub-Tabs Navigation */}
         <div className={`flex p-1.5 rounded-2xl border ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} gap-1 text-xs font-bold`}>
           <button
-            onClick={() => setActiveSubTab('details')}
+            onClick={() => handleSelectSubTab('details')}
             className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
               activeSubTab === 'details'
                 ? 'bg-[#14798D] text-white shadow-md'
@@ -125,7 +143,7 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveSubTab('qr')}
+            onClick={() => handleSelectSubTab('qr')}
             className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
               activeSubTab === 'qr'
                 ? 'bg-[#14798D] text-white shadow-md'
@@ -137,7 +155,7 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
           </button>
 
           <button
-            onClick={() => setActiveSubTab('nfc')}
+            onClick={() => handleSelectSubTab('nfc')}
             className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
               activeSubTab === 'nfc'
                 ? 'bg-[#14798D] text-white shadow-md'
