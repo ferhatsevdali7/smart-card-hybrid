@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, CreditCard, LayoutDashboard, QrCode, Smartphone, KeyRound, 
-  Globe, Sun, Moon, LogIn, LogOut, User as UserIcon 
+  Globe, Sun, Moon, LogIn, LogOut, User as UserIcon, Home 
 } from 'lucide-react';
 import { SmartCard } from './types/card';
 import { getStoredCardData } from './lib/storage';
+import { LandingHeroView } from './components/LandingHeroView';
 import { MedicalSOSView } from './components/MedicalSOSView';
 import { PersonalCardView } from './components/PersonalCardView';
 import { DashboardView } from './components/DashboardView';
@@ -14,15 +15,15 @@ import { NfcPayloadHelper } from './components/NfcPayloadHelper';
 import { CryptoVaultView } from './components/CryptoVaultView';
 import { AuthModal } from './components/AuthModal';
 import { subscribeToAuth, logoutUser } from './lib/authService';
-import { fetchCardFromFirestore, listenToCardUpdates } from './lib/firestoreService';
+import { fetchCardFromFirestore, fetchUserCard, saveCardToFirestore, listenToCardUpdates } from './lib/firestoreService';
 import { User } from 'firebase/auth';
 import { Language, ThemeMode, translations } from './lib/i18n';
 
-type AppTab = 'simulator' | 'sos' | 'personal' | 'dashboard' | 'vault' | 'print_nfc';
+type AppTab = 'home' | 'simulator' | 'sos' | 'personal' | 'dashboard' | 'vault' | 'print_nfc';
 
 export function App() {
   const [card, setCard] = useState<SmartCard>(getStoredCardData());
-  const [activeTab, setActiveTab] = useState<AppTab>('simulator');
+  const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [isPublicScan, setIsPublicScan] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
@@ -33,13 +34,40 @@ export function App() {
     return (localStorage.getItem('smart_card_theme') as ThemeMode) || 'dark';
   });
 
+  // Track Firebase Auth State & Bind User Cards
   useEffect(() => {
-    const unsubscribe = subscribeToAuth((currentUser) => {
+    const unsubscribe = subscribeToAuth(async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        // Load user's own card if available
+        const userCard = await fetchUserCard(currentUser.uid);
+        if (userCard) {
+          setCard(userCard);
+        } else {
+          // Initialize user's card if none exists
+          const customId = `CARD-${currentUser.uid.slice(0, 6).toUpperCase()}`;
+          const initialUserCard: SmartCard = {
+            ...getStoredCardData(),
+            cardId: customId,
+            medical: {
+              ...getStoredCardData().medical,
+              fullName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kart Sahibi',
+            },
+            personal: {
+              ...getStoredCardData().personal,
+              fullName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kart Sahibi',
+              email: currentUser.email || '',
+            }
+          };
+          await saveCardToFirestore(initialUserCard, currentUser.uid);
+          setCard(initialUserCard);
+        }
+      }
     });
     return () => unsubscribe();
   }, []);
 
+  // Handle URL Query Routing (?view=sos, ?view=personal, ?id=...)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const view = params.get('view');
@@ -53,20 +81,21 @@ export function App() {
       setIsPublicScan(true);
     }
 
-    const cardIdToLoad = id || 'CARD-2026-8941';
-    fetchCardFromFirestore(cardIdToLoad).then((loadedCard) => {
-      if (loadedCard) {
-        setCard(loadedCard);
-      }
-    });
+    if (id) {
+      fetchCardFromFirestore(id).then((loadedCard) => {
+        if (loadedCard) {
+          setCard(loadedCard);
+        }
+      });
 
-    const unsubscribeCard = listenToCardUpdates(cardIdToLoad, (updatedCard) => {
-      setCard(updatedCard);
-    });
+      const unsubscribeCard = listenToCardUpdates(id, (updatedCard) => {
+        setCard(updatedCard);
+      });
 
-    return () => {
-      unsubscribeCard();
-    };
+      return () => {
+        unsubscribeCard();
+      };
+    }
   }, []);
 
   const toggleLanguage = () => {
@@ -86,14 +115,14 @@ export function App() {
       setIsAuthModalOpen(true);
       return;
     }
+    setIsPublicScan(false);
     setActiveTab(tab);
   };
 
   const handleLogout = async () => {
     await logoutUser();
-    if (activeTab === 'dashboard') {
-      setActiveTab('simulator');
-    }
+    setActiveTab('home');
+    setIsPublicScan(false);
   };
 
   const t = translations[language];
@@ -106,7 +135,7 @@ export function App() {
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-3">
           {/* Brand Logo & Title */}
           <div 
-            onClick={() => { setIsPublicScan(false); setActiveTab('simulator'); }}
+            onClick={() => { setIsPublicScan(false); setActiveTab('home'); }}
             className="flex items-center gap-2.5 cursor-pointer select-none group"
           >
             <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#14798D] via-[#509BEC] to-[#D1C8B9] flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
@@ -129,8 +158,20 @@ export function App() {
           {!isPublicScan ? (
             <nav className={`hidden md:flex items-center gap-1 ${isDark ? 'bg-slate-950/70 border-slate-800' : 'bg-slate-100/90 border-slate-200'} p-1 rounded-2xl border`}>
               <button
+                onClick={() => handleTabClick('home')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                  activeTab === 'home'
+                    ? 'bg-[#14798D] text-white shadow-sm'
+                    : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-white'
+                }`}
+              >
+                <Home className="w-3.5 h-3.5" />
+                <span>{t.tabs.home}</span>
+              </button>
+
+              <button
                 onClick={() => handleTabClick('simulator')}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   activeTab === 'simulator'
                     ? 'bg-[#14798D] text-white shadow-sm'
                     : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-white'
@@ -142,7 +183,7 @@ export function App() {
 
               <button
                 onClick={() => handleTabClick('sos')}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   activeTab === 'sos'
                     ? 'bg-[#14798D] text-white shadow-sm'
                     : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-white'
@@ -154,7 +195,7 @@ export function App() {
 
               <button
                 onClick={() => handleTabClick('personal')}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   activeTab === 'personal'
                     ? 'bg-[#509BEC] text-white shadow-sm'
                     : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-white'
@@ -166,7 +207,7 @@ export function App() {
 
               <button
                 onClick={() => handleTabClick('vault')}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   activeTab === 'vault'
                     ? (isDark ? 'bg-slate-800 text-white' : 'bg-white text-slate-900 shadow-sm border border-slate-200')
                     : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-white'
@@ -178,7 +219,7 @@ export function App() {
 
               <button
                 onClick={() => handleTabClick('dashboard')}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   activeTab === 'dashboard'
                     ? (isDark ? 'bg-slate-800 text-white' : 'bg-white text-slate-900 shadow-sm border border-slate-200')
                     : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-white'
@@ -191,7 +232,7 @@ export function App() {
 
               <button
                 onClick={() => handleTabClick('print_nfc')}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all ${
                   activeTab === 'print_nfc'
                     ? (isDark ? 'bg-slate-800 text-white' : 'bg-white text-slate-900 shadow-sm border border-slate-200')
                     : isDark ? 'text-slate-400 hover:text-white hover:bg-slate-800/60' : 'text-slate-600 hover:text-slate-900 hover:bg-white'
@@ -208,7 +249,7 @@ export function App() {
             </div>
           )}
 
-          {/* Top Right Controls: Language, Theme & Auth Switchers */}
+          {/* Top Right Controls */}
           <div className="flex items-center gap-2">
             {/* User Auth Status / Button */}
             {user ? (
@@ -220,7 +261,7 @@ export function App() {
                   }`}
                 >
                   <UserIcon className="w-3.5 h-3.5 text-[#509BEC]" />
-                  <span className="max-w-[100px] truncate">{user.displayName || user.email?.split('@')[0]}</span>
+                  <span className="max-w-[110px] truncate">{user.displayName || user.email?.split('@')[0]}</span>
                 </div>
                 <button
                   onClick={handleLogout}
@@ -282,6 +323,18 @@ export function App() {
 
       {/* Main Content Render */}
       <main className="flex-1">
+        {activeTab === 'home' && (
+          <LandingHeroView
+            card={card}
+            lang={language}
+            theme={theme}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
+            onOpenSimulator={() => { setIsPublicScan(false); setActiveTab('simulator'); }}
+            onOpenDemoSOS={() => { setIsPublicScan(false); setActiveTab('sos'); }}
+            onOpenDemoPersonal={() => { setIsPublicScan(false); setActiveTab('personal'); }}
+          />
+        )}
+
         {activeTab === 'simulator' && (
           <CardSimulatorView 
             card={card} 
@@ -298,6 +351,8 @@ export function App() {
             cardId={card.cardId} 
             lang={language}
             theme={theme}
+            isPublicScan={isPublicScan}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
           />
         )}
 
@@ -307,6 +362,8 @@ export function App() {
             cardId={card.cardId} 
             lang={language}
             theme={theme}
+            isPublicScan={isPublicScan}
+            onOpenAuth={() => setIsAuthModalOpen(true)}
           />
         )}
 
@@ -354,6 +411,16 @@ export function App() {
       {!isPublicScan && (
         <div className={`md:hidden fixed bottom-0 inset-x-0 ${isDark ? 'bg-slate-900/95 border-slate-800 text-slate-400' : 'bg-white/95 border-slate-200 text-slate-600'} border-t backdrop-blur-md px-2 py-1.5 z-50 flex items-center justify-around`}>
           <button
+            onClick={() => handleTabClick('home')}
+            className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-semibold ${
+              activeTab === 'home' ? 'text-[#14798D]' : ''
+            }`}
+          >
+            <Home className="w-4 h-4" />
+            <span>{language === 'tr' ? 'Ana Sayfa' : 'Home'}</span>
+          </button>
+
+          <button
             onClick={() => handleTabClick('simulator')}
             className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-semibold ${
               activeTab === 'simulator' ? 'text-[#14798D]' : ''
@@ -384,19 +451,9 @@ export function App() {
           </button>
 
           <button
-            onClick={() => handleTabClick('vault')}
-            className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-semibold ${
-              activeTab === 'vault' ? 'text-[#14798D]' : ''
-            }`}
-          >
-            <KeyRound className="w-4 h-4" />
-            <span>{language === 'tr' ? 'Kasa' : 'Vault'}</span>
-          </button>
-
-          <button
             onClick={() => handleTabClick('dashboard')}
             className={`flex flex-col items-center gap-1 py-1 px-2 rounded-lg text-[10px] font-semibold ${
-              activeTab === 'dashboard' ? (isDark ? 'text-white' : 'text-slate-900 font-bold') : ''
+              activeTab === 'dashboard' ? (isDark ? 'text-white font-bold' : 'text-slate-900 font-bold') : ''
             }`}
           >
             <LayoutDashboard className="w-4 h-4" />
@@ -409,3 +466,4 @@ export function App() {
 }
 
 export default App;
+

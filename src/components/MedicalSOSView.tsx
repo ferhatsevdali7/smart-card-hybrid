@@ -12,9 +12,18 @@ interface MedicalSOSViewProps {
   cardId: string;
   lang?: Language;
   theme?: ThemeMode;
+  isPublicScan?: boolean;
+  onOpenAuth?: () => void;
 }
 
-export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ medical, cardId, lang = 'tr', theme = 'dark' }) => {
+export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ 
+  medical, 
+  cardId, 
+  lang = 'tr', 
+  theme = 'dark',
+  isPublicScan = false,
+  onOpenAuth 
+}) => {
   const [copied, setCopied] = useState(false);
   const t = translations[lang].sos;
   const isDark = theme === 'dark';
@@ -232,10 +241,22 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ medical, cardId,
           </button>
         </div>
 
-        <div className={`text-center pt-2 pb-6 ${isDark ? 'text-slate-500' : 'text-slate-400'} text-[11px] flex items-center justify-center gap-1.5`}>
+        <div className={`text-center pt-2 ${isDark ? 'text-slate-500' : 'text-slate-400'} text-[11px] flex items-center justify-center gap-1.5`}>
           <Info className="w-3.5 h-3.5" />
           <span>{t.disclaimer}</span>
         </div>
+
+        {isPublicScan && onOpenAuth && (
+          <div className="text-center pt-3 pb-6">
+            <button
+              onClick={onOpenAuth}
+              className={`text-xs ${isDark ? 'text-slate-400 hover:text-white bg-slate-900 border-slate-800' : 'text-slate-600 hover:text-slate-900 bg-white border-slate-200'} border px-4 py-2 rounded-xl transition-all inline-flex items-center gap-1.5 shadow-sm`}
+            >
+              <User className="w-3.5 h-3.5 text-[#509BEC]" />
+              <span>{lang === 'tr' ? 'Kart Sahibi misiniz? Giriş Yapın & Düzenleyin' : 'Card Owner? Sign In & Edit'}</span>
+            </button>
+          </div>
+        )}
       </main>
     </div>
   );

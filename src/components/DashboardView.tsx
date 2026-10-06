@@ -42,14 +42,6 @@ export const DashboardView: React.FC<DashboardProps> = ({
   const t = translations[lang].dashboard;
   const isDark = theme === 'dark';
 
-  const save = (e: React.FormEvent) => {
-    e.preventDefault();
-    saveCardToFirestore(data);
-    onUpdate(data);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-  };
-
   const handleAddOcrMedicine = (name: string, dosage: string) => {
     setData(prev => ({
       ...prev,
@@ -59,6 +51,35 @@ export const DashboardView: React.FC<DashboardProps> = ({
       }
     }));
     setShowOcrScanner(false);
+  };
+
+  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert(lang === 'tr' ? 'Fotoğraf boyutu en fazla 2MB olabilir.' : 'Photo size must be less than 2MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      setData(prev => ({
+        ...prev,
+        medical: { ...prev.medical, avatarUrl: result },
+        personal: { ...prev.personal, avatarUrl: result }
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const save = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveCardToFirestore(data, user?.uid);
+    onUpdate(data);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   return (
@@ -96,12 +117,14 @@ export const DashboardView: React.FC<DashboardProps> = ({
           >
             <RotateCcw className="w-3.5 h-3.5" /> {t.resetBtn}
           </button>
-          <button 
-            onClick={save} 
-            className="bg-[#14798D] hover:bg-[#0E6476] text-white text-xs font-bold py-2.5 px-5 rounded-xl flex items-center gap-1.5 shadow-lg shadow-[#14798D]/20 active:scale-98 transition-all"
-          >
-            <Save className="w-4 h-4" /> {t.saveBtn}
-          </button>
+          {tab !== 'kvkk' && (
+            <button 
+              onClick={save} 
+              className="bg-[#14798D] hover:bg-[#0E6476] text-white text-xs font-bold py-2.5 px-5 rounded-xl flex items-center gap-1.5 shadow-lg shadow-[#14798D]/20 active:scale-98 transition-all"
+            >
+              <Save className="w-4 h-4" /> {t.saveBtn}
+            </button>
+          )}
         </div>
       </div>
 
@@ -155,6 +178,44 @@ export const DashboardView: React.FC<DashboardProps> = ({
       <form onSubmit={save} className="space-y-6">
         {tab === 'med' ? (
           <div className="space-y-6">
+            {/* Profile Avatar Upload Section */}
+            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border p-6 rounded-3xl space-y-4`}>
+              <h2 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'} flex items-center gap-2`}>
+                <Camera className="w-4 h-4 text-[#509BEC]" /> {lang === 'tr' ? 'Profil Fotoğrafı' : 'Profile Photo'}
+              </h2>
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  {data.medical.avatarUrl ? (
+                    <img 
+                      src={data.medical.avatarUrl} 
+                      alt="Avatar Preview" 
+                      className="w-16 h-16 rounded-2xl object-cover border-2 border-[#509BEC] shadow-md"
+                    />
+                  ) : (
+                    <div className={`w-16 h-16 rounded-2xl ${isDark ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-300'} border flex items-center justify-center`}>
+                      <UserIcon className="w-7 h-7" />
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="cursor-pointer bg-[#14798D]/20 hover:bg-[#14798D]/30 text-[#14798D] dark:text-[#509BEC] border border-[#14798D]/40 text-xs font-semibold py-2 px-3.5 rounded-xl inline-flex items-center gap-1.5 transition-all">
+                    <Camera className="w-3.5 h-3.5" />
+                    <span>{lang === 'tr' ? 'Fotoğraf Seç / Yükle' : 'Upload Photo'}</span>
+                    <input type="file" accept="image/*" onChange={handlePhotoUpload} className="hidden" />
+                  </label>
+                  {data.medical.avatarUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setData(prev => ({ ...prev, medical: { ...prev.medical, avatarUrl: undefined }, personal: { ...prev.personal, avatarUrl: undefined } }))}
+                      className="text-xs text-rose-400 hover:text-rose-300 block font-medium"
+                    >
+                      {lang === 'tr' ? 'Fotoğrafı Kaldır' : 'Remove Photo'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border p-6 rounded-3xl space-y-4`}>
               <h2 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'} flex items-center gap-2`}>
                 <UserIcon className="w-4 h-4 text-[#14798D]" /> {t.fullName} &amp; {t.bloodType}

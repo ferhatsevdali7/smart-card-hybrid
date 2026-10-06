@@ -9,7 +9,8 @@ export const translations = {
     themeToggleLight: 'Açık Tema',
     themeToggleDark: 'Koyu Tema',
     tabs: {
-      simulator: '3D Kart & Simülatör',
+      home: 'Ana Sayfa',
+      simulator: '3D Simülatör',
       sos: 'Ön Yüz (SOS)',
       personal: 'Arka Yüz (Kişisel)',
       vault: 'Kasa (AES)',
@@ -148,7 +149,8 @@ export const translations = {
     themeToggleLight: 'Light Mode',
     themeToggleDark: 'Dark Mode',
     tabs: {
-      simulator: '3D Card & Simulator',
+      home: 'Home',
+      simulator: '3D Simulator',
       sos: 'Front (SOS)',
       personal: 'Back (Personal)',
       vault: 'Vault (AES)',

@@ -1,20 +1,33 @@
-﻿import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { db } from './firebase';
 import { SmartCard } from '../types/card';
 import { getStoredCardData, saveStoredCardData } from './storage';
 
 const COLLECTION_NAME = 'cards';
+const USERS_COLLECTION = 'users';
 
 /**
- * Saves or updates a card record in Cloud Firestore
+ * Saves or updates a card record in Cloud Firestore, linking to user if logged in
  */
-export async function saveCardToFirestore(card: SmartCard): Promise<void> {
+export async function saveCardToFirestore(card: SmartCard, ownerUid?: string): Promise<void> {
   try {
     const cardRef = doc(db, COLLECTION_NAME, card.cardId);
-    await setDoc(cardRef, {
+    const payload: any = {
       ...card,
       updatedAtFirestore: serverTimestamp()
-    }, { merge: true });
+    };
+    if (ownerUid) {
+      payload.ownerUid = ownerUid;
+    }
+    await setDoc(cardRef, payload, { merge: true });
+
+    if (ownerUid) {
+      const userRef = doc(db, USERS_COLLECTION, ownerUid);
+      await setDoc(userRef, {
+        lastCardId: card.cardId,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    }
 
     // Also keep local storage in sync
     saveStoredCardData(card);
@@ -43,6 +56,25 @@ export async function fetchCardFromFirestore(cardId: string): Promise<SmartCard>
 }
 
 /**
+ * Fetches the card belonging to a specific logged-in user
+ */
+export async function fetchUserCard(userId: string): Promise<SmartCard | null> {
+  try {
+    const userRef = doc(db, USERS_COLLECTION, userId);
+    const userSnap = await getDoc(userRef);
+    if (userSnap.exists()) {
+      const userData = userSnap.data();
+      if (userData?.lastCardId) {
+        return await fetchCardFromFirestore(userData.lastCardId);
+      }
+    }
+  } catch (error) {
+    console.warn('User card fetch error:', error);
+  }
+  return null;
+}
+
+/**
  * Subscribes to real-time updates of a card from Cloud Firestore
  */
 export function listenToCardUpdates(cardId: string, onUpdate: (card: SmartCard) => void): () => void {
@@ -61,3 +93,4 @@ export function listenToCardUpdates(cardId: string, onUpdate: (card: SmartCard) 
     return () => {};
   }
 }
+
