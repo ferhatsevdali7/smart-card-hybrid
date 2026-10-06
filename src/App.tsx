@@ -4,7 +4,7 @@ import {
   Globe, Sun, Moon, LogIn, LogOut, User as UserIcon, Home, Menu, X 
 } from 'lucide-react';
 import { SmartCard } from './types/card';
-import { getStoredCardData } from './lib/storage';
+import { getStoredCardData, clearStoredCardData, DEMO_CARD_DATA } from './lib/storage';
 import { LandingHeroView } from './components/LandingHeroView';
 import { MedicalSOSView } from './components/MedicalSOSView';
 import { PersonalCardView } from './components/PersonalCardView';
@@ -22,7 +22,7 @@ import { Language, ThemeMode, translations } from './lib/i18n';
 type AppTab = 'home' | 'simulator' | 'sos' | 'personal' | 'dashboard' | 'vault' | 'print_nfc';
 
 export function App() {
-  const [card, setCard] = useState<SmartCard>(getStoredCardData());
+  const [card, setCard] = useState<SmartCard>(DEMO_CARD_DATA);
   const [activeTab, setActiveTab] = useState<AppTab>('home');
   const [isPublicScan, setIsPublicScan] = useState(false);
   const [user, setUser] = useState<User | null>(null);
@@ -48,20 +48,26 @@ export function App() {
           // Initialize user's card if none exists
           const customId = `CARD-${currentUser.uid.slice(0, 6).toUpperCase()}`;
           const initialUserCard: SmartCard = {
-            ...getStoredCardData(),
+            ...DEMO_CARD_DATA,
             cardId: customId,
             medical: {
-              ...getStoredCardData().medical,
+              ...DEMO_CARD_DATA.medical,
               fullName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kart Sahibi',
             },
             personal: {
-              ...getStoredCardData().personal,
+              ...DEMO_CARD_DATA.personal,
               fullName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kart Sahibi',
               email: currentUser.email || '',
             }
           };
           await saveCardToFirestore(initialUserCard, currentUser.uid);
           setCard(initialUserCard);
+        }
+      } else {
+        // When not logged in and no ?id in URL, reset to safe demo
+        const params = new URLSearchParams(window.location.search);
+        if (!params.get('id')) {
+          setCard(DEMO_CARD_DATA);
         }
       }
     });
@@ -112,7 +118,7 @@ export function App() {
   };
 
   const handleNavigate = (tab: AppTab) => {
-    if (tab === 'dashboard' && !user) {
+    if (!user && !isPublicScan && tab !== 'home' && tab !== 'simulator') {
       setIsAuthModalOpen(true);
       setIsDrawerOpen(false);
       return;
@@ -124,6 +130,8 @@ export function App() {
 
   const handleLogout = async () => {
     await logoutUser();
+    clearStoredCardData();
+    setCard(DEMO_CARD_DATA);
     setActiveTab('home');
     setIsPublicScan(false);
     setIsDrawerOpen(false);
@@ -163,7 +171,7 @@ export function App() {
           {/* Orta Kısım: Tamamen Boş */}
           <div className="flex-1" />
 
-          {/* Sağ Taraf: Sırasıyla Ana Sayfa -> Giriş/Çıkış -> Dil -> Tema -> "=" Menü */}
+          {/* Sağ Taraf: Sırasıyla Ana Sayfa -> Giriş/Çıkış -> Dil -> Tema -> "=" Menü (Sadece Giriş Yapıldığında) */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             
             {/* 1. Ana Sayfa Butonu */}
@@ -236,27 +244,29 @@ export function App() {
               {isDark ? <Sun className="w-4 h-4 text-amber-300" /> : <Moon className="w-4 h-4 text-[#14798D]" />}
             </button>
 
-            {/* 5. "=" Menü Butonu (Tüm Başlıkları Barındıran) */}
-            <button
-              onClick={() => setIsDrawerOpen(!isDrawerOpen)}
-              title={language === 'tr' ? 'Menü' : 'Menu'}
-              className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
-                isDrawerOpen
-                  ? 'bg-[#14798D] border-[#14798D] text-white shadow-md scale-105'
-                  : isDark 
-                    ? 'bg-slate-800 border-slate-700 text-slate-100 hover:border-[#14798D]' 
-                    : 'bg-white border-slate-300 text-slate-800 hover:border-[#14798D] shadow-sm'
-              }`}
-            >
-              {isDrawerOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-            </button>
+            {/* 5. "=" Menü Butonu (YALNIZCA KULLANICI GİRİŞ YAPTIĞINDA GÖRÜNÜR) */}
+            {user && (
+              <button
+                onClick={() => setIsDrawerOpen(!isDrawerOpen)}
+                title={language === 'tr' ? 'Menü' : 'Menu'}
+                className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
+                  isDrawerOpen
+                    ? 'bg-[#14798D] border-[#14798D] text-white shadow-md scale-105'
+                    : isDark 
+                      ? 'bg-slate-800 border-slate-700 text-slate-100 hover:border-[#14798D]' 
+                      : 'bg-white border-slate-300 text-slate-800 hover:border-[#14798D] shadow-sm'
+                }`}
+              >
+                {isDrawerOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              </button>
+            )}
 
           </div>
         </div>
       </header>
 
-      {/* Sağdan Kayan Menü Paneli (Drawer) - Tüm Başlıklar Burada */}
-      {isDrawerOpen && (
+      {/* Sağdan Kayan Menü Paneli (Drawer) - YALNIZCA GİRİŞ YAPAN KART SAHİBİ İÇİN */}
+      {user && isDrawerOpen && (
         <div className="fixed inset-0 z-50 flex justify-end">
           {/* Arka plan karartması */}
           <div 
@@ -275,8 +285,8 @@ export function App() {
                     ☰
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm">{language === 'tr' ? 'Sistem Menüsü' : 'System Menu'}</h3>
-                    <p className="text-[11px] text-slate-400">{language === 'tr' ? 'Hızlı Erişim ve Modlar' : 'Quick Access & Modes'}</p>
+                    <h3 className="font-bold text-sm">{language === 'tr' ? 'Kart Sahibi Menüsü' : 'Card Owner Menu'}</h3>
+                    <p className="text-[11px] text-slate-400">{userName}</p>
                   </div>
                 </div>
                 <button 
@@ -364,7 +374,6 @@ export function App() {
                   <div>
                     <div className="flex items-center gap-2">
                       <span>{language === 'tr' ? 'Yönetim Paneli' : 'Admin Dashboard'}</span>
-                      {!user && <span className="w-2 h-2 rounded-full bg-amber-400"></span>}
                     </div>
                     <div className="text-[11px] opacity-70">{language === 'tr' ? 'Kart bilgileri ve sağlık kaydı düzenle' : 'Edit medical and card data'}</div>
                   </div>
@@ -432,7 +441,7 @@ export function App() {
       <main className="flex-1">
         {activeTab === 'home' && (
           <LandingHeroView
-            card={card}
+            card={DEMO_CARD_DATA}
             lang={language}
             theme={theme}
             onOpenAuth={() => setIsAuthModalOpen(true)}
@@ -444,7 +453,7 @@ export function App() {
 
         {activeTab === 'simulator' && (
           <CardSimulatorView 
-            card={card} 
+            card={user ? card : DEMO_CARD_DATA} 
             onOpenSOS={() => { setIsPublicScan(true); setActiveTab('sos'); }}
             onOpenPersonal={() => { setIsPublicScan(true); setActiveTab('personal'); }}
             lang={language}
@@ -454,8 +463,8 @@ export function App() {
 
         {activeTab === 'sos' && (
           <MedicalSOSView 
-            medical={card.medical} 
-            cardId={card.cardId} 
+            medical={(user || isPublicScan) ? card.medical : DEMO_CARD_DATA.medical} 
+            cardId={(user || isPublicScan) ? card.cardId : DEMO_CARD_DATA.cardId} 
             lang={language}
             theme={theme}
             isPublicScan={isPublicScan}
@@ -465,8 +474,8 @@ export function App() {
 
         {activeTab === 'personal' && (
           <PersonalCardView 
-            personal={card.personal} 
-            cardId={card.cardId} 
+            personal={(user || isPublicScan) ? card.personal : DEMO_CARD_DATA.personal} 
+            cardId={(user || isPublicScan) ? card.cardId : DEMO_CARD_DATA.cardId} 
             lang={language}
             theme={theme}
             isPublicScan={isPublicScan}
@@ -519,4 +528,5 @@ export function App() {
 }
 
 export default App;
+
 
