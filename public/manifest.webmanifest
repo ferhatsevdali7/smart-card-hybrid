@@ -1,0 +1,18 @@
+﻿{
+  "name": "Hibrit Akıllı Kart (Medical SOS + Card)",
+  "short_name": "Akıllı Kart",
+  "description": "Medikal Acil Durum SOS ve Güvenli Dijital Kartvizit",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#14798D",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

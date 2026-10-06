@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { 
   Save, RotateCcw, Plus, Trash2, Heart, CreditCard, 
-  User, ShieldAlert, Phone, Building2, CheckCircle2, 
-  AlertTriangle, Pill, Camera, KeyRound 
+  User as UserIcon, ShieldAlert, Phone, Building2, CheckCircle2, 
+  AlertTriangle, Pill, Camera, KeyRound, LogOut, ShieldCheck, FileText 
 } from 'lucide-react';
 import { SmartCard, BloodType } from '../types/card';
 import { resetCardData } from '../lib/storage';
 import { saveCardToFirestore } from '../lib/firestoreService';
 import { OcrMedicineScanner } from './OcrMedicineScanner';
+import { User } from 'firebase/auth';
 import { Language, ThemeMode, translations } from '../lib/i18n';
 
 interface DashboardProps { 
@@ -15,13 +16,22 @@ interface DashboardProps {
   onUpdate: (u: SmartCard) => void; 
   lang?: Language;
   theme?: ThemeMode;
+  user?: User | null;
+  onLogout?: () => void;
 }
 
 const BLOOD_TYPES: BloodType[] = ['0 Rh+', '0 Rh-', 'A Rh+', 'A Rh-', 'B Rh+', 'B Rh-', 'AB Rh+', 'AB Rh-'];
 
-export const DashboardView: React.FC<DashboardProps> = ({ card, onUpdate, lang = 'tr', theme = 'dark' }) => {
+export const DashboardView: React.FC<DashboardProps> = ({ 
+  card, 
+  onUpdate, 
+  lang = 'tr', 
+  theme = 'dark',
+  user,
+  onLogout 
+}) => {
   const [data, setData] = useState<SmartCard>(card);
-  const [tab, setTab] = useState<'med' | 'per'>('med');
+  const [tab, setTab] = useState<'med' | 'per' | 'kvkk'>('med');
   const [saved, setSaved] = useState(false);
   const [allergy, setAllergy] = useState('');
   const [disease, setDisease] = useState('');
@@ -59,9 +69,26 @@ export const DashboardView: React.FC<DashboardProps> = ({ card, onUpdate, lang =
             <h1 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{t.title}</h1>
             <span className="text-xs font-mono bg-[#14798D]/10 text-[#14798D] dark:text-[#509BEC] px-2 py-0.5 rounded border border-[#14798D]/30">{data.cardId}</span>
           </div>
-          <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'} mt-1`}>{t.desc}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{t.desc}</p>
+            {user && (
+              <span className="text-[11px] font-semibold text-[#509BEC] bg-[#509BEC]/10 px-2 py-0.5 rounded-full border border-[#509BEC]/20">
+                👤 {user.email || user.displayName}
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
+          {user && onLogout && (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold py-2.5 px-3.5 rounded-xl flex items-center gap-1.5 transition-all"
+              title="Çıkış Yap"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Çıkış
+            </button>
+          )}
           <button 
             type="button" 
             onClick={() => { if(confirm(t.resetConfirm)) { const d = resetCardData(); setData(d); onUpdate(d); } }} 
@@ -92,10 +119,10 @@ export const DashboardView: React.FC<DashboardProps> = ({ card, onUpdate, lang =
         />
       )}
 
-      <div className={`flex border-b ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
+      <div className={`flex border-b overflow-x-auto ${isDark ? 'border-slate-800' : 'border-slate-200'}`}>
         <button 
           onClick={() => setTab('med')} 
-          className={`flex items-center gap-2 px-6 py-3 font-semibold text-xs border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-6 py-3 font-semibold text-xs border-b-2 transition-all whitespace-nowrap ${
             tab === 'med' 
               ? 'border-[#14798D] text-[#14798D] dark:text-[#509BEC] bg-[#14798D]/10' 
               : isDark ? 'border-transparent text-slate-400 hover:text-white' : 'border-transparent text-slate-600 hover:text-slate-900'
@@ -105,13 +132,23 @@ export const DashboardView: React.FC<DashboardProps> = ({ card, onUpdate, lang =
         </button>
         <button 
           onClick={() => setTab('per')} 
-          className={`flex items-center gap-2 px-6 py-3 font-semibold text-xs border-b-2 transition-all ${
+          className={`flex items-center gap-2 px-6 py-3 font-semibold text-xs border-b-2 transition-all whitespace-nowrap ${
             tab === 'per' 
               ? 'border-[#509BEC] text-[#509BEC] bg-[#509BEC]/10' 
               : isDark ? 'border-transparent text-slate-400 hover:text-white' : 'border-transparent text-slate-600 hover:text-slate-900'
           }`}
         >
           <CreditCard className="w-4 h-4 text-[#D1C8B9]" /> {t.perTab}
+        </button>
+        <button 
+          onClick={() => setTab('kvkk')} 
+          className={`flex items-center gap-2 px-6 py-3 font-semibold text-xs border-b-2 transition-all whitespace-nowrap ${
+            tab === 'kvkk' 
+              ? 'border-emerald-500 text-emerald-500 bg-emerald-500/10' 
+              : isDark ? 'border-transparent text-slate-400 hover:text-white' : 'border-transparent text-slate-600 hover:text-slate-900'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-emerald-400" /> {t.kvkkTab}
         </button>
       </div>
 
@@ -120,7 +157,7 @@ export const DashboardView: React.FC<DashboardProps> = ({ card, onUpdate, lang =
           <div className="space-y-6">
             <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border p-6 rounded-3xl space-y-4`}>
               <h2 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'} flex items-center gap-2`}>
-                <User className="w-4 h-4 text-[#14798D]" /> {t.fullName} &amp; {t.bloodType}
+                <UserIcon className="w-4 h-4 text-[#14798D]" /> {t.fullName} &amp; {t.bloodType}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
@@ -241,11 +278,11 @@ export const DashboardView: React.FC<DashboardProps> = ({ card, onUpdate, lang =
               />
             </div>
           </div>
-        ) : (
+        ) : tab === 'per' ? (
           <div className="space-y-6">
             <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border p-6 rounded-3xl space-y-4`}>
               <h2 className={`text-sm font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'} flex items-center gap-2`}>
-                <User className="w-4 h-4 text-[#509BEC]" /> {t.fullName} &amp; {t.phone}
+                <UserIcon className="w-4 h-4 text-[#509BEC]" /> {t.fullName} &amp; {t.phone}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div><label className={`block text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'} mb-1`}>{t.fullName}</label><input type="text" value={data.personal.fullName} onChange={e => setData({...data, personal: {...data.personal, fullName: e.target.value}})} className={`w-full ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-200 text-slate-900'} border rounded-xl px-3 py-2 text-xs`} /></div>
@@ -282,6 +319,63 @@ export const DashboardView: React.FC<DashboardProps> = ({ card, onUpdate, lang =
                     <input type="text" placeholder={t.ibanPlaceholder} value={acc.iban} onChange={e => { const list = [...data.personal.bankAccounts]; list[idx].iban = e.target.value; setData({...data, personal: {...data.personal, bankAccounts: list}}); }} className={`w-full bg-slate-900 border border-slate-800 rounded-lg px-2.5 py-1 text-xs text-white font-mono font-semibold`} />
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* KVKK & Privacy Section */
+          <div className="space-y-6">
+            <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border p-6 rounded-3xl space-y-4`}>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                </div>
+                <div>
+                  <h2 className={`text-base font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>
+                    {lang === 'tr' ? 'KVKK ve Veri Güvenliği Aydınlatma Metni' : 'GDPR & Data Protection Statement'}
+                  </h2>
+                  <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
+                    {lang === 'tr' ? '6698 Sayılı Kişisel Verilerin Korunması Kanunu ve GDPR Kapsamında Bilgilendirme' : 'Information in accordance with Personal Data Protection & GDPR'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className={`${isDark ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'} p-4 rounded-2xl border space-y-2`}>
+                  <div className="flex items-center gap-2 text-rose-400 font-semibold text-xs">
+                    <ShieldAlert className="w-4 h-4" />
+                    {lang === 'tr' ? 'Özel Nitelikli Sağlık Verileri (Ön Yüz)' : 'Special Category Medical Data (Front)'}
+                  </div>
+                  <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                    {lang === 'tr' 
+                      ? 'Kan grubu, kritik alerjiler ve acil durum kişileri gibi hayati bilgiler; yalnızca kaza, bayılma ve acil tıbbi müdahale anında ilk yardım ekipleri veya üçüncü şahıslar tarafından hızla görülebilmesi (ICE) amacıyla açık profilde tutulur.' 
+                      : 'Vital information such as blood type, critical allergies, and emergency contacts are kept publicly accessible strictly for immediate first-responder / ICE intervention during emergencies.'}
+                  </p>
+                </div>
+
+                <div className={`${isDark ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'} p-4 rounded-2xl border space-y-2`}>
+                  <div className="flex items-center gap-2 text-[#509BEC] font-semibold text-xs">
+                    <CreditCard className="w-4 h-4" />
+                    {lang === 'tr' ? 'Kişisel & Finansal Veriler (Arka Yüz)' : 'Personal & Financial Data (Back)'}
+                  </div>
+                  <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                    {lang === 'tr' 
+                      ? 'Kartvizit, telefon ve IBAN gibi bilgileriniz 60 saniyelik zaman aşımı korumalı oturumla sunulur. IBAN kopyalandığında güvenlik amacıyla cihaz panosu 30 saniye sonra otomatik temizlenir.' 
+                      : 'Business contacts, phone, and IBAN numbers are protected by a 60-second timed session. Copied IBANs trigger a 30-second automated clipboard wipe for security.'}
+                  </p>
+                </div>
+
+                <div className={`${isDark ? 'bg-slate-950/60 border-slate-800/80' : 'bg-slate-50 border-slate-200'} p-4 rounded-2xl border space-y-2 md:col-span-2`}>
+                  <div className="flex items-center gap-2 text-emerald-400 font-semibold text-xs">
+                    <KeyRound className="w-4 h-4" />
+                    {lang === 'tr' ? 'Sıfır Bilgi Kriptografi (Zero-Knowledge Client Vault)' : 'Zero-Knowledge Client-Side Encryption'}
+                  </div>
+                  <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'}`}>
+                    {lang === 'tr' 
+                      ? 'Kasa sekmesindeki şifreleme işlemi tamamen tarayıcınızda PBKDF2 (100.000 iterasyon) ve AES-GCM 256-bit standartlarında gerçekleştirilir. Şifreleme anahtarınız veya PIN kodunuz sunucuya ASLA iletilmez ve saklanmaz.' 
+                      : 'Vault encryption runs entirely in your browser using PBKDF2 (100,000 iterations) and AES-GCM 256-bit. Your encryption key or PIN is NEVER sent to or stored on any server.'}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
