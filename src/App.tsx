@@ -394,41 +394,6 @@ export function App() {
                   </div>
                 </button>
 
-                <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 px-3 pt-3">
-                  {language === 'tr' ? 'Güvenlik & Donanım' : 'Security & Tools'}
-                </div>
-
-                {/* 4. Kripto Kasa */}
-                <button
-                  onClick={() => handleNavigate('vault')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left ${
-                    activeTab === 'vault'
-                      ? (isDark ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-900')
-                      : isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
-                  }`}
-                >
-                  <KeyRound className="w-5 h-5 text-amber-400 shrink-0" />
-                  <div>
-                    <div>{language === 'tr' ? 'Kripto Kasa' : 'Crypto Vault'}</div>
-                    <div className="text-[11px] opacity-70">{language === 'tr' ? 'AES-256 sıfır bilgi şifreli kasa' : 'Zero-knowledge encrypted storage'}</div>
-                  </div>
-                </button>
-
-                {/* 5. QR & NFC Baskı Merkezi */}
-                <button
-                  onClick={() => handleNavigate('print_nfc')}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left ${
-                    activeTab === 'print_nfc'
-                      ? (isDark ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-900')
-                      : isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
-                  }`}
-                >
-                  <QrCode className="w-5 h-5 text-[#509BEC] shrink-0" />
-                  <div>
-                    <div>{language === 'tr' ? 'QR & NFC Baskı Merkezi' : 'QR & NFC Print Center'}</div>
-                    <div className="text-[11px] opacity-70">{language === 'tr' ? 'Fiziksel karta aktarım ve QR baskı' : 'Export QR codes & NFC payloads'}</div>
-                  </div>
-                </button>
 
                 <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 px-3 pt-3">
                   {language === 'tr' ? 'Destek & Yasal' : 'Support & Legal'}

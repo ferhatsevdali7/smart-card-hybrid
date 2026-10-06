@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { 
   Heart, AlertTriangle, Phone, ShieldCheck, Pill, 
-  Activity, CheckCircle2, User, Copy, Check, Info, FileText, ArrowRight, Edit3, X, Plus, Trash2, Save 
+  Activity, CheckCircle2, User, Copy, Check, Info, FileText, 
+  ArrowRight, Edit3, X, Plus, Trash2, Save, QrCode, Wifi, Smartphone, Printer
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { MedicalInfo, BloodType, EmergencyContact } from '../types/card';
 import { generateNdefTextPayload } from '../lib/nfc';
 import { Language, ThemeMode, translations } from '../lib/i18n';
@@ -18,6 +20,12 @@ interface MedicalSOSViewProps {
   isOwner?: boolean;
 }
 
+const BLOOD_TYPES: BloodType[] = [
+  '0 Rh+', '0 Rh-', 'A Rh+', 'A Rh-', 'B Rh+', 'B Rh-', 'AB Rh+', 'AB Rh-'
+];
+
+type SubTab = 'details' | 'qr' | 'nfc';
+
 export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ 
   medical, 
   cardId, 
@@ -28,7 +36,10 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
   onUpdateMedical,
   isOwner = false
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>('details');
   const [copied, setCopied] = useState(false);
+  const [copiedNfc, setCopiedNfc] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<MedicalInfo>(medical);
   const [newDisease, setNewDisease] = useState('');
@@ -42,11 +53,26 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
   const t = translations[lang].sos;
   const isDark = theme === 'dark';
 
+  const nfcPayload = generateNdefTextPayload(medical);
+  const nfcByteCount = new Blob([nfcPayload]).size;
+  const sosUrl = `${window.location.origin}?view=sos&id=${cardId}`;
+
   const handleCopySummary = () => {
-    const text = generateNdefTextPayload(medical);
-    navigator.clipboard.writeText(text);
+    navigator.clipboard.writeText(nfcPayload);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCopyNfc = () => {
+    navigator.clipboard.writeText(nfcPayload);
+    setCopiedNfc(true);
+    setTimeout(() => setCopiedNfc(false), 2000);
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(sosUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
   };
 
   const handleSaveEdit = (e: React.FormEvent) => {
@@ -59,12 +85,11 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
 
   const age = new Date().getFullYear() - medical.birthYear;
 
-
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} pb-20 selection:bg-[#509BEC] selection:text-white transition-colors`}>
+    <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} pb-24 selection:bg-[#509BEC] selection:text-white transition-colors`}>
       {/* Top Banner - Serene & Trustworthy Deep Teal */}
       <div className="bg-gradient-to-r from-[#14798D] via-[#0E6476] to-[#14798D] text-white px-4 py-3 shadow-lg shadow-[#14798D]/20 sticky top-0 z-40">
-        <div className="max-w-md mx-auto flex items-center justify-between">
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-xl bg-white/15 text-white flex items-center justify-center backdrop-blur-sm">
               <ShieldCheck className="w-5 h-5 text-[#D1C8B9]" />
@@ -84,248 +109,382 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
         </div>
       </div>
 
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
-        {/* Owner Quick Edit Action Bar */}
-        {isOwner && onUpdateMedical && (
-          <div className="flex items-center justify-between bg-[#14798D]/15 border border-[#14798D]/30 p-3 rounded-2xl">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#14798D] dark:text-[#509BEC]">
-              <ShieldCheck className="w-4 h-4" />
-              <span>{lang === 'tr' ? 'Sağlık Kartı Yönetimi' : 'Health Card Management'}</span>
-            </div>
-            <button
-              onClick={() => { setEditForm(medical); setIsEditing(true); }}
-              className="bg-[#14798D] hover:bg-[#0E6476] text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-98 transition-all"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>{lang === 'tr' ? 'Bilgileri Düzenle' : 'Edit Info'}</span>
-            </button>
-          </div>
-        )}
-
-        {/* Profile Card & Blood Type Spotlight */}
-        <div className={`bg-gradient-to-br ${isDark ? 'from-[#14798D]/25 via-slate-900 to-slate-950 border-[#14798D]/40' : 'from-[#14798D]/10 via-white to-slate-50 border-[#14798D]/30'} border rounded-3xl p-5 shadow-xl relative overflow-hidden backdrop-blur-md`}>
-          <div className="absolute top-0 right-0 w-36 h-36 bg-[#509BEC]/10 rounded-full blur-2xl pointer-events-none"></div>
-
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-center gap-3.5">
-              <div className="relative">
-                {medical.avatarUrl ? (
-                  <img 
-                    src={medical.avatarUrl} 
-                    alt={medical.fullName} 
-                    className="w-16 h-16 rounded-2xl object-cover border-2 border-[#509BEC]/60 shadow-md"
-                  />
-                ) : (
-                  <div className={`w-16 h-16 rounded-2xl ${isDark ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-200 border-slate-300 text-slate-600'} border flex items-center justify-center`}>
-                    <User className="w-8 h-8" />
-                  </div>
-                )}
-                <div className={`absolute -bottom-1 -right-1 bg-[#14798D] text-white rounded-full p-1 border-2 ${isDark ? 'border-slate-950' : 'border-white'}`}>
-                  <Activity className="w-3.5 h-3.5 text-[#D1C8B9]" />
-                </div>
-              </div>
-
-              <div>
-                <h1 className={`text-lg font-black ${isDark ? 'text-white' : 'text-slate-900'} tracking-tight`}>{medical.fullName}</h1>
-                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'} mt-0.5`}>
-                  {t.birthYear}: <span className="font-bold text-[#14798D] dark:text-[#D1C8B9]">{medical.birthYear}</span> 
-                  {' '}({age} {t.yearsOld})
-                </p>
-                {medical.organDonor && (
-                  <span className={`inline-flex items-center gap-1 mt-1 text-[10px] font-semibold ${isDark ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800/40' : 'bg-emerald-50 text-emerald-700 border-emerald-300'} px-2 py-0.5 rounded-md border`}>
-                    <CheckCircle2 className="w-3 h-3 text-emerald-500" /> {t.organDonor}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Blood Type Badge in Deep Teal & Linen */}
-            <div className="bg-gradient-to-br from-[#14798D] to-[#0E6476] text-white rounded-2xl p-3 text-center shadow-lg min-w-[76px] border border-[#509BEC]/40">
-              <div className="text-[8px] font-bold uppercase tracking-wider text-[#D1C8B9]">{t.bloodType}</div>
-              <div className="text-2xl font-black tracking-tight leading-none mt-1">{medical.bloodType}</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Emergency Contacts (ICE) */}
-        <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border rounded-3xl p-4 space-y-3 shadow-lg`}>
-          <div className="flex items-center justify-between">
-            <h2 className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'} uppercase tracking-wider flex items-center gap-2`}>
-              <Phone className="w-4 h-4 text-[#509BEC]" />
-              {t.iceTitle}
-            </h2>
-            <span className={`text-[10px] ${isDark ? 'text-slate-400 bg-slate-800' : 'text-slate-600 bg-slate-100'} px-2 py-0.5 rounded font-medium`}>{t.tapToCall}</span>
-          </div>
-
-          <div className="space-y-2">
-            {medical.emergencyContacts.map((contact) => (
-              <a
-                key={contact.id}
-                href={`tel:${contact.phone}`}
-                className={`flex items-center justify-between p-3.5 rounded-2xl ${isDark ? 'bg-slate-800/80 hover:bg-[#14798D]/20 border-slate-700/60 hover:border-[#14798D]/60' : 'bg-slate-50 hover:bg-[#14798D]/10 border-slate-200 hover:border-[#14798D]/40'} border transition-all duration-200 group`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-[#509BEC]/20 text-[#509BEC] flex items-center justify-center border border-[#509BEC]/30 group-hover:scale-105 transition-transform">
-                    <Phone className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className={`font-bold text-sm ${isDark ? 'text-white group-hover:text-[#509BEC]' : 'text-slate-900 group-hover:text-[#14798D]'} transition-colors`}>
-                      {contact.name}
-                    </div>
-                    <div className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                      {t.relation}: <span className="text-[#14798D] dark:text-[#D1C8B9] font-medium">{contact.relation}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-[#509BEC] hover:bg-[#4085d4] text-white text-xs font-bold px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md group-hover:scale-105 transition-all">
-                  <span>{t.callBtn}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </div>
-              </a>
-            ))}
-          </div>
-        </div>
-
-        {/* Allergies & Sensitivities */}
-        <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border rounded-3xl p-4 space-y-2.5 shadow-lg`}>
-          <h2 className="text-xs font-bold text-amber-500 uppercase tracking-wider flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-amber-500" />
-            {t.allergies}
-          </h2>
-          {medical.allergies.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {medical.allergies.map((allergy, index) => (
-                <span 
-                  key={index}
-                  className={`bg-amber-500/10 border border-amber-500/30 ${isDark ? 'text-amber-300' : 'text-amber-700'} text-xs px-3 py-1.5 rounded-xl font-medium flex items-center gap-1.5`}
-                >
-                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-                  {allergy}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{t.noAllergies}</p>
-          )}
-        </div>
-
-        {/* Chronic Conditions & Medications */}
-        <div className="grid grid-cols-1 gap-3">
-          <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border rounded-3xl p-4 space-y-2 shadow-lg`}>
-            <h2 className={`text-xs font-bold ${isDark ? 'text-[#D1C8B9]' : 'text-[#14798D]'} uppercase tracking-wider flex items-center gap-2`}>
-              <Heart className="w-4 h-4 text-[#14798D]" />
-              {t.chronic}
-            </h2>
-            <div className="space-y-1.5">
-              {medical.chronicDiseases.map((disease, idx) => (
-                <div key={idx} className={`text-xs ${isDark ? 'bg-slate-800/60 border-slate-700/40 text-slate-200' : 'bg-slate-50 border-slate-200 text-slate-700'} border px-3 py-2 rounded-xl flex items-center gap-2`}>
-                  <div className="w-1.5 h-1.5 rounded-full bg-[#509BEC]"></div>
-                  {disease}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border rounded-3xl p-4 space-y-2 shadow-lg`}>
-            <h2 className="text-xs font-bold text-[#509BEC] uppercase tracking-wider flex items-center gap-2">
-              <Pill className="w-4 h-4 text-[#509BEC]" />
-              {t.medications}
-            </h2>
-            <div className="space-y-2">
-              {medical.medications.map((med, idx) => (
-                <div key={idx} className={`${isDark ? 'bg-slate-800/60 border-slate-700/40' : 'bg-slate-50 border-slate-200'} border p-2.5 rounded-xl flex items-center justify-between`}>
-                  <div>
-                    <div className={`text-xs font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{med.name}</div>
-                    <div className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>{med.dosage}</div>
-                  </div>
-                  <span className="text-[10px] bg-[#509BEC]/10 text-[#509BEC] px-2 py-0.5 rounded-md border border-[#509BEC]/20 font-medium">
-                    {t.regular}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Doctor Note */}
-        {medical.doctorNote && (
-          <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border rounded-3xl p-4 space-y-2 shadow-lg`}>
-            <h2 className={`text-xs font-bold ${isDark ? 'text-[#D1C8B9]' : 'text-[#14798D]'} uppercase tracking-wider flex items-center gap-2`}>
-              <FileText className="w-4 h-4 text-[#14798D]" />
-              {t.doctorNotes}
-            </h2>
-            <p className={`text-xs ${isDark ? 'text-slate-300 bg-slate-800/60 border-slate-700/40' : 'text-slate-700 bg-slate-50 border-slate-200'} p-3 rounded-xl border italic leading-relaxed`}>
-              "{medical.doctorNote}"
-            </p>
-          </div>
-        )}
-
-        {/* Copy summary action */}
-        <div className="pt-2">
+      <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
+        {/* Responsive Sub-Tabs Navigation */}
+        <div className={`flex p-1.5 rounded-2xl border ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} gap-1 text-xs font-bold`}>
           <button
-            onClick={handleCopySummary}
-            className={`w-full ${isDark ? 'bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200' : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-sm'} border text-xs font-semibold py-3 px-4 rounded-2xl flex items-center justify-center gap-2 transition-all active:scale-98 shadow-md`}
+            onClick={() => setActiveSubTab('details')}
+            className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
+              activeSubTab === 'details'
+                ? 'bg-[#14798D] text-white shadow-md'
+                : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+            }`}
           >
-            {copied ? (
-              <>
-                <Check className="w-4 h-4 text-emerald-500" />
-                <span className="text-emerald-500 font-bold">{t.copiedSummary}</span>
-              </>
-            ) : (
-              <>
-                <Copy className="w-4 h-4 text-[#509BEC]" />
-                <span>{t.copySummary}</span>
-              </>
-            )}
+            <ShieldCheck className="w-4 h-4" />
+            <span>{lang === 'tr' ? 'sağlık kartı bilgisi /düzenle' : 'Health Card Info / Edit'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('qr')}
+            className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
+              activeSubTab === 'qr'
+                ? 'bg-[#14798D] text-white shadow-md'
+                : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <QrCode className="w-4 h-4" />
+            <span>{lang === 'tr' ? 'sağlık kartı QR' : 'Health Card QR'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('nfc')}
+            className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
+              activeSubTab === 'nfc'
+                ? 'bg-[#14798D] text-white shadow-md'
+                : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Wifi className="w-4 h-4 rotate-90" />
+            <span>{lang === 'tr' ? 'sağlık kartı NFC' : 'Health Card NFC'}</span>
           </button>
         </div>
 
-        <div className={`text-center pt-2 ${isDark ? 'text-slate-500' : 'text-slate-400'} text-[11px] flex items-center justify-center gap-1.5`}>
-          <Info className="w-3.5 h-3.5" />
-          <span>{t.disclaimer}</span>
-        </div>
+        {/* ----------------- SUB-TAB 1: DETAILS & EDIT ----------------- */}
+        {activeSubTab === 'details' && (
+          <div className="space-y-4">
+            {/* Owner Quick Edit Action Bar */}
+            {isOwner && onUpdateMedical && (
+              <div className="flex items-center justify-between bg-[#14798D]/15 border border-[#14798D]/30 p-3 rounded-2xl">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#14798D] dark:text-[#509BEC]">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>{lang === 'tr' ? 'Sağlık Kartı Sahibi Modu' : 'Health Card Owner Mode'}</span>
+                </div>
+                <button
+                  onClick={() => { setEditForm(medical); setIsEditing(true); }}
+                  className="bg-[#14798D] hover:bg-[#0E6476] text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-98 transition-all"
+                >
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>{lang === 'tr' ? 'Bilgileri Düzenle' : 'Edit Info'}</span>
+                </button>
+              </div>
+            )}
 
-        {isPublicScan && onOpenAuth && (
-          <div className="text-center pt-3 pb-6">
+            {/* Critical Rescue Hero: Blood Type & Patient Info */}
+            <section className={`${isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-5 relative overflow-hidden transition-colors`}>
+              <div className="absolute top-0 right-0 w-36 h-36 bg-rose-500/10 rounded-full blur-2xl pointer-events-none -mr-10 -mt-10"></div>
+              
+              <div className="flex items-center justify-between relative z-10 gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-xs font-bold text-[#14798D] dark:text-[#509BEC]">
+                    <User className="w-3.5 h-3.5" />
+                    <span>{lang === 'tr' ? 'Medikal Profil' : 'Medical Profile'}</span>
+                  </div>
+                  <h1 className="text-xl sm:text-2xl font-black tracking-tight">{medical.fullName}</h1>
+                  <p className="text-xs text-slate-400 font-medium">
+                    {medical.birthYear} ({age} {t.yearsOld})
+                  </p>
+                </div>
+
+                {/* Blood Group Badge */}
+                <div className="shrink-0 text-center">
+                  <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-rose-600 text-white flex flex-col items-center justify-center shadow-lg shadow-rose-600/30 border-2 border-white/20">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-rose-200">{t.bloodType}</span>
+                    <span className="text-xl sm:text-2xl font-black tracking-tighter leading-none">{medical.bloodType}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Badges: Organ Donor & Implant */}
+              <div className="flex flex-wrap gap-2 mt-4 pt-3 border-t border-slate-800/60">
+                {medical.organDonor && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    {t.organDonor}
+                  </span>
+                )}
+                {medical.hasImplant && (
+                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                    <Activity className="w-3.5 h-3.5" />
+                    {medical.implantDetails || (lang === 'tr' ? 'Protez / Medikal Cihaz Var' : 'Medical Implant')}
+                  </span>
+                )}
+              </div>
+            </section>
+
+            {/* Direct Call ICE Contacts */}
+            <section className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Phone className="w-3.5 h-3.5 text-rose-500" />
+                  <span>{t.iceTitle}</span>
+                </h2>
+                <span className="text-[10px] text-rose-400 font-mono font-bold bg-rose-500/10 px-2 py-0.5 rounded-full border border-rose-500/20">
+                  {t.tapToCall}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {medical.emergencyContacts.map((contact, idx) => (
+                  <a
+                    key={contact.id || idx}
+                    href={`tel:${contact.phone}`}
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all active:scale-98 ${
+                      isDark 
+                        ? 'bg-slate-900/90 border-slate-800 hover:border-rose-500/50 hover:bg-slate-850' 
+                        : 'bg-white border-slate-200 hover:border-rose-400 shadow-sm'
+                    }`}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="text-xs font-bold">{contact.name}</div>
+                      <div className="text-[11px] text-slate-400">{contact.relation}</div>
+                      <div className="text-xs font-mono font-bold text-rose-400">{contact.phone}</div>
+                    </div>
+                    <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shadow-md shadow-rose-600/30 shrink-0">
+                      <Phone className="w-5 h-5" />
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </section>
+
+            {/* Critical Allergies & Chronic Diseases */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Allergies */}
+              <section className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-4 space-y-2.5`}>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-amber-400 uppercase tracking-wider">
+                  <AlertTriangle className="w-4 h-4" />
+                  <span>{t.allergies}</span>
+                </div>
+                {medical.allergies && medical.allergies.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {medical.allergies.map((allergy, idx) => (
+                      <span key={idx} className="bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-xl text-xs font-bold">
+                        ⚠️ {allergy}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">{t.noAllergies}</p>
+                )}
+              </section>
+
+              {/* Chronic Conditions */}
+              <section className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-4 space-y-2.5`}>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#14798D] dark:text-[#509BEC] uppercase tracking-wider">
+                  <Activity className="w-4 h-4" />
+                  <span>{t.chronic}</span>
+                </div>
+                {medical.chronicDiseases && medical.chronicDiseases.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {medical.chronicDiseases.map((disease, idx) => (
+                      <span key={idx} className="bg-[#14798D]/15 text-[#14798D] dark:text-[#509BEC] border border-[#14798D]/30 px-2.5 py-1 rounded-xl text-xs font-bold">
+                        🩺 {disease}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500 italic">{lang === 'tr' ? 'Kronik rahatsızlık kaydı yok' : 'No chronic diseases'}</p>
+                )}
+              </section>
+            </div>
+
+            {/* Daily Medications */}
+            {medical.medications && medical.medications.length > 0 && (
+              <section className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-4 space-y-2.5`}>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-[#509BEC] uppercase tracking-wider">
+                  <Pill className="w-4 h-4" />
+                  <span>{t.medications}</span>
+                </div>
+                <div className="space-y-1.5">
+                  {medical.medications.map((med, idx) => (
+                    <div key={idx} className={`p-2.5 rounded-2xl border flex items-center justify-between text-xs ${isDark ? 'bg-slate-950/60 border-slate-800' : 'bg-slate-50 border-slate-200'}`}>
+                      <div className="font-bold">{med.name}</div>
+                      <div className="text-slate-400 font-mono">{med.dosage}</div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Doctor & Rescue Note */}
+            {medical.doctorNote && (
+              <section className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-4 space-y-2`}>
+                <div className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>{t.doctorNotes}</span>
+                </div>
+                <p className="text-xs leading-relaxed text-slate-300 italic bg-[#14798D]/10 border border-[#14798D]/20 p-3 rounded-2xl">
+                  "{medical.doctorNote}"
+                </p>
+              </section>
+            )}
+
+            {/* Fast Copy Full Summary Button */}
             <button
-              onClick={onOpenAuth}
-              className={`text-xs ${isDark ? 'text-slate-400 hover:text-white bg-slate-900 border-slate-800' : 'text-slate-600 hover:text-slate-900 bg-white border-slate-200'} border px-4 py-2 rounded-xl transition-all inline-flex items-center gap-1.5 shadow-sm`}
+              onClick={handleCopySummary}
+              className={`w-full py-3.5 px-4 rounded-2xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                copied 
+                  ? 'bg-emerald-600 text-white border-emerald-500' 
+                  : isDark ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-200' : 'bg-white hover:bg-slate-100 border-slate-200 text-slate-800 shadow-sm'
+              }`}
             >
-              <User className="w-3.5 h-3.5 text-[#509BEC]" />
-              <span>{lang === 'tr' ? 'Kart Sahibi misiniz? Giriş Yapın & Düzenleyin' : 'Card Owner? Sign In & Edit'}</span>
+              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+              <span>{copied ? t.copiedSummary : t.copySummary}</span>
             </button>
           </div>
         )}
-      </main>
 
-      {/* In-Page Medical Edit Modal */}
-      {isEditing && (
+        {/* ----------------- SUB-TAB 2: HEALTH CARD QR ----------------- */}
+        {activeSubTab === 'qr' && (
+          <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-6 space-y-6 text-center transition-colors`}>
+            <div>
+              <h2 className="text-base font-bold flex items-center justify-center gap-2">
+                <QrCode className="w-5 h-5 text-rose-500" />
+                <span>{lang === 'tr' ? 'Sağlık Kartı QR Kodu' : 'Health Card QR Code'}</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                {lang === 'tr' ? 'Fiziksel kartınızın ön yüzü veya acil durum bilekliği için doğrudan taranabilir QR kod' : 'Direct emergency QR code for physical card front or medical ID bracelet'}
+              </p>
+            </div>
+
+            {/* The QR Container */}
+            <div className="bg-white p-5 rounded-3xl inline-block shadow-2xl mx-auto border-4 border-rose-500/30">
+              <QRCodeSVG id="health-sos-qr" value={sosUrl} size={180} level="H" includeMargin />
+            </div>
+
+            {/* Quick Summary under QR */}
+            <div className="space-y-1">
+              <div className="text-sm font-bold">{medical.fullName}</div>
+              <div className="text-xs font-mono font-bold text-rose-500">
+                {t.bloodType}: {medical.bloodType} • ID: {cardId}
+              </div>
+              <div className="text-[11px] text-slate-400 font-mono break-all pt-1 max-w-sm mx-auto">
+                {sosUrl}
+              </div>
+            </div>
+
+            {/* Actions: Copy Link & Print */}
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <button
+                onClick={handleCopyLink}
+                className={`flex-1 py-3 px-4 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                  copiedLink 
+                    ? 'bg-emerald-600 text-white border-emerald-500' 
+                    : isDark ? 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
+                }`}
+              >
+                {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedLink ? (lang === 'tr' ? 'Bağlantı Kopyalandı!' : 'Link Copied!') : (lang === 'tr' ? 'Doğrudan SOS Linkini Kopyala' : 'Copy Direct SOS Link')}</span>
+              </button>
+
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-3 px-4 rounded-xl bg-[#14798D] hover:bg-[#0E6476] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all"
+              >
+                <Printer className="w-4 h-4" />
+                <span>{lang === 'tr' ? 'Karekod Kartını Yazdır / PDF' : 'Print QR Card / PDF'}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ----------------- SUB-TAB 3: HEALTH CARD NFC ----------------- */}
+        {activeSubTab === 'nfc' && (
+          <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-6 space-y-5 transition-colors`}>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-rose-500/15 text-rose-400 flex items-center justify-center border border-rose-500/30">
+                  <Wifi className="w-5 h-5 rotate-90" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold">{lang === 'tr' ? 'Sağlık Kartı NFC Yükü' : 'Health Card NFC Payload'}</h2>
+                  <p className="text-xs text-slate-400">{lang === 'tr' ? 'İnternetsiz ortamda NTAG216 çipinden okunacak hayat kurtarma verisi' : 'Offline rescue payload encoded onto NTAG216 chip'}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[11px] font-mono text-slate-400 block">{nfcByteCount} / 888 Byte</span>
+                <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                  NTAG216
+                </span>
+              </div>
+            </div>
+
+            {/* Raw Payload Preview Box */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>{lang === 'tr' ? 'NFC Çipine Yazılacak Ham Metin:' : 'Raw Text Payload to Write:'}</span>
+                <button
+                  onClick={handleCopyNfc}
+                  className="text-xs font-semibold text-[#509BEC] hover:text-[#4085d4] flex items-center gap-1"
+                >
+                  {copiedNfc ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedNfc ? (lang === 'tr' ? 'Kopyalandı!' : 'Copied!') : (lang === 'tr' ? 'Metni Kopyala' : 'Copy Text')}</span>
+                </button>
+              </div>
+
+              <pre className={`${isDark ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-800'} border p-4 rounded-2xl text-xs font-mono whitespace-pre-wrap leading-relaxed`}>
+                {nfcPayload}
+              </pre>
+            </div>
+
+            {/* 3 Step NFC Write Guide */}
+            <div className={`${isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-4 space-y-3`}>
+              <h3 className="text-xs font-bold flex items-center gap-2 text-rose-400">
+                <Smartphone className="w-4 h-4" />
+                <span>{lang === 'tr' ? 'Telefondan Akıllı Karta Nasıl Yazılır? (3 Adım)' : 'How to Write to Card via Phone (3 Steps)'}</span>
+              </h3>
+
+              <ol className="text-xs text-slate-400 space-y-2 pl-4 list-decimal">
+                <li>
+                  {lang === 'tr' ? 'App Store veya Google Play\'den ücretsiz "NFC Tools" uygulamasını indirin.' : 'Download free "NFC Tools" from App Store or Google Play.'}
+                </li>
+                <li>
+                  {lang === 'tr' ? 'Uygulamada "Yaz (Write)" → "Kayıt Ekle (Add a record)" → "Metin (Text)" seçin.' : 'Select "Write" → "Add a record" → "Text" in the app.'}
+                </li>
+                <li>
+                  {lang === 'tr' ? 'Yukarıdaki kopyaladığınız metni yapıştırıp fiziksel kartınızı telefonun arkasına dokundurun!' : 'Paste the copied text and tap your NFC card to the back of your phone!'}
+                </li>
+              </ol>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* In-Page Owner Edit Modal */}
+      {isOwner && isEditing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div onClick={() => setIsEditing(false)} className="fixed inset-0 bg-black/65 backdrop-blur-sm" />
-          <div className={`relative w-full max-w-xl ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-3xl p-6 shadow-2xl z-10 space-y-4 max-h-[90vh] overflow-y-auto`}>
+          <div 
+            onClick={() => setIsEditing(false)} 
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity" 
+          />
+
+          <div className={`relative w-full max-w-lg ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-3xl p-6 shadow-2xl z-10 max-h-[90vh] overflow-y-auto space-y-5`}>
             
-            <div className="flex items-center justify-between pb-3 border-b border-slate-700/40">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-700">
               <div className="flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-[#14798D]" />
                 <h3 className="font-bold text-base">{lang === 'tr' ? 'Sağlık Kartı Bilgilerini Düzenle' : 'Edit Health Card Info'}</h3>
               </div>
-              <button onClick={() => setIsEditing(false)} className="p-1.5 rounded-lg border border-slate-700 hover:bg-slate-800">
+              <button 
+                onClick={() => setIsEditing(false)}
+                className={`p-1.5 rounded-xl border ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-100'}`}
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
-              {/* Name, Birth Year, Blood Group */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Full Name & Birth Year */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Ad Soyad' : 'Full Name'}</label>
                   <input
                     type="text"
                     value={editForm.fullName}
                     onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
-                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
                     required
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
                   />
                 </div>
                 <div className="space-y-1">
@@ -334,33 +493,35 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
                     type="number"
                     value={editForm.birthYear}
                     onChange={(e) => setEditForm({ ...editForm, birthYear: parseInt(e.target.value) || 1990 })}
-                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
                     required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Kan Grubu' : 'Blood Group'}</label>
-                  <select
-                    value={editForm.bloodType}
-                    onChange={(e) => setEditForm({ ...editForm, bloodType: e.target.value as BloodType })}
                     className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
-                  >
-                    {['0 Rh+', '0 Rh-', 'A Rh+', 'A Rh-', 'B Rh+', 'B Rh-', 'AB Rh+', 'AB Rh-'].map((bg) => (
-                      <option key={bg} value={bg}>{bg}</option>
-                    ))}
-                  </select>
+                  />
                 </div>
               </div>
 
-              {/* Allergies Multi-add */}
+              {/* Blood Type */}
+              <div className="space-y-1">
+                <label className="font-bold text-rose-400 uppercase tracking-wider">{t.bloodType}</label>
+                <select
+                  value={editForm.bloodType}
+                  onChange={(e) => setEditForm({ ...editForm, bloodType: e.target.value as BloodType })}
+                  className={`w-full p-2.5 rounded-xl border font-bold ${isDark ? 'bg-slate-950 border-slate-800 text-rose-400' : 'bg-slate-50 border-slate-300 text-rose-600'} outline-none`}
+                >
+                  {BLOOD_TYPES.map((bt) => (
+                    <option key={bt} value={bt}>{bt}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Allergies Management */}
               <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <label className="font-bold text-amber-400 uppercase tracking-wider">{lang === 'tr' ? 'Kritik Alerjiler' : 'Allergies'}</label>
+                <label className="font-bold text-amber-400 uppercase tracking-wider">{t.allergies}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={newAllergy}
                     onChange={(e) => setNewAllergy(e.target.value)}
-                    placeholder={lang === 'tr' ? 'Örn: Penisilin' : 'e.g. Penicillin'}
+                    placeholder={lang === 'tr' ? 'Örn: Penisilin, Fıstık' : 'e.g. Penicillin, Peanuts'}
                     className={`flex-1 p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
                   />
                   <button
@@ -377,9 +538,9 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {editForm.allergies.map((allg, idx) => (
-                    <span key={idx} className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-lg flex items-center gap-1.5 font-semibold">
-                      {allg}
+                  {editForm.allergies.map((all, idx) => (
+                    <span key={idx} className="bg-slate-800 text-slate-200 border border-slate-700 px-2 py-0.5 rounded-lg flex items-center gap-1.5 font-medium">
+                      {all}
                       <Trash2 
                         className="w-3 h-3 text-rose-400 cursor-pointer hover:scale-110" 
                         onClick={() => setEditForm({ ...editForm, allergies: editForm.allergies.filter((_, i) => i !== idx) })}
@@ -389,9 +550,9 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
                 </div>
               </div>
 
-              {/* Diseases Multi-add */}
+              {/* Chronic Diseases */}
               <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <label className="font-bold text-[#509BEC] uppercase tracking-wider">{lang === 'tr' ? 'Kronik Hastalıklar' : 'Chronic Diseases'}</label>
+                <label className="font-bold text-[#509BEC] uppercase tracking-wider">{t.chronic}</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -428,7 +589,7 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
 
               {/* Emergency Contacts */}
               <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <label className="font-bold text-rose-400 uppercase tracking-wider">{lang === 'tr' ? 'Acil Durum Yakınları (ICE)' : 'ICE Emergency Contacts'}</label>
+                <label className="font-bold text-rose-400 uppercase tracking-wider">{t.iceTitle}</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <input
                     type="text"
@@ -491,7 +652,7 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
 
               {/* Doctor Note */}
               <div className="space-y-1 pt-2 border-t border-slate-800/60">
-                <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Doktor & İlk Yardım Notu' : 'Doctor Note'}</label>
+                <label className="font-bold text-slate-400 uppercase tracking-wider">{t.doctorNotes}</label>
                 <textarea
                   value={editForm.doctorNote || ''}
                   onChange={(e) => setEditForm({ ...editForm, doctorNote: e.target.value })}
@@ -509,7 +670,7 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
                     onChange={(e) => setEditForm({ ...editForm, organDonor: e.target.checked })}
                     className="rounded accent-[#14798D]"
                   />
-                  <span>{lang === 'tr' ? 'Organ Bağışçısıyım' : 'Organ Donor'}</span>
+                  <span>{t.organDonor}</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
@@ -518,7 +679,7 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
                     onChange={(e) => setEditForm({ ...editForm, hasImplant: e.target.checked })}
                     className="rounded accent-[#14798D]"
                   />
-                  <span>{lang === 'tr' ? 'Kalp Pili / Protez Var' : 'Has Implant / Pacemaker'}</span>
+                  <span>{lang === 'tr' ? 'Protez / Medikal Cihaz Var' : 'Has Implant / Device'}</span>
                 </label>
               </div>
 

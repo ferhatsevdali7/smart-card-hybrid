@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { 
   CreditCard, Copy, Check, Clock, ShieldCheck, 
   Download, MessageSquare, Phone, Mail, 
-  ExternalLink, Lock, RotateCcw, AlertCircle, Building2, Sparkles, Edit3, X, Plus, Trash2, Save 
+  ExternalLink, Lock, RotateCcw, AlertCircle, Building2, 
+  Sparkles, Edit3, X, Plus, Trash2, Save, QrCode, Wifi, Smartphone, Printer
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { PersonalInfo, BankAccount, SocialLink } from '../types/card';
 import { downloadVCardFile } from '../lib/vcard';
 import { Language, ThemeMode, translations } from '../lib/i18n';
@@ -20,6 +22,7 @@ interface PersonalCardViewProps {
 }
 
 const SESSION_DURATION = 60;
+type SubTab = 'details' | 'qr' | 'nfc';
 
 export const PersonalCardView: React.FC<PersonalCardViewProps> = ({ 
   personal, 
@@ -31,9 +34,12 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
   onUpdatePersonal,
   isOwner = false
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<SubTab>('details');
   const [timeLeft, setTimeLeft] = useState<number>(SESSION_DURATION);
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [copiedIbanId, setCopiedIbanId] = useState<string | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedNfc, setCopiedNfc] = useState(false);
   const [clipboardTimer, setClipboardTimer] = useState<number | null>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [editForm, setEditForm] = useState<PersonalInfo>(personal);
@@ -44,6 +50,11 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
 
   const t = translations[lang].personal;
   const isDark = theme === 'dark';
+  const personalUrl = `${window.location.origin}?view=personal&id=${cardId}`;
+  
+  // Prepare vCard text for NFC NDEF text payload
+  const nfcVCardPayload = `BEGIN:VCARD\nVERSION:3.0\nFN:${personal.fullName}\nTITLE:${personal.title}\nORG:${personal.company}\nTEL:${personal.phone}\nEMAIL:${personal.email}\nURL:${personalUrl}\nEND:VCARD`;
+  const nfcByteCount = new Blob([nfcVCardPayload]).size;
 
   const handleSaveEdit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,7 +63,6 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
     }
     setIsEditing(false);
   };
-
 
   useEffect(() => {
     if (timeLeft <= 0) {
@@ -77,7 +87,6 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
   useEffect(() => {
     if (clipboardTimer === null) return;
     if (clipboardTimer <= 0) {
-      // Physically wipe clipboard content on timer expiration for maximum security
       navigator.clipboard.writeText('').catch(() => {});
       setClipboardTimer(null);
       return;
@@ -100,401 +109,523 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
     navigator.clipboard.writeText(iban.replace(/\s+/g, ''));
     setCopiedIbanId(id);
     setClipboardTimer(30);
+    setTimeout(() => setCopiedIbanId(null), 3000);
+  };
 
-    setTimeout(() => {
-      setCopiedIbanId(null);
-    }, 3000);
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(personalUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleCopyNfc = () => {
+    navigator.clipboard.writeText(nfcVCardPayload);
+    setCopiedNfc(true);
+    setTimeout(() => setCopiedNfc(false), 2000);
   };
 
   const handleResetSession = () => {
-    setIsLocked(false);
     setTimeLeft(SESSION_DURATION);
+    setIsLocked(false);
   };
 
-  if (isLocked) {
-    return (
-      <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex items-center justify-center p-4 transition-colors`}>
-        <div className={`max-w-md w-full ${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-2xl'} border rounded-3xl p-8 text-center space-y-5 shadow-2xl relative overflow-hidden`}>
-          <div className="w-16 h-16 bg-[#14798D]/20 text-[#509BEC] rounded-2xl flex items-center justify-center mx-auto border border-[#14798D]/30">
-            <Lock className="w-8 h-8 text-[#14798D] dark:text-[#509BEC]" />
-          </div>
-
-          <div className="space-y-2">
-            <h2 className={`text-xl font-bold ${isDark ? 'text-white' : 'text-slate-900'}`}>{t.sessionExpiredTitle}</h2>
-            <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-600'} leading-relaxed`}>
-              {t.sessionExpiredDesc}
-            </p>
-          </div>
-
-          <div className={`${isDark ? 'bg-slate-950 border-slate-800 text-[#D1C8B9]' : 'bg-slate-100 border-slate-200 text-slate-700'} border rounded-xl p-3 text-xs font-mono font-bold`}>
-            ID: {cardId}
-          </div>
-
-          <button
-            onClick={handleResetSession}
-            className="w-full bg-gradient-to-r from-[#14798D] to-[#509BEC] hover:from-[#0E6476] hover:to-[#4085d4] text-white font-bold py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 transition-all active:scale-98 shadow-lg shadow-[#14798D]/20"
-          >
-            <RotateCcw className="w-4 h-4" />
-            <span>{t.reScanBtn}</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const progressPercentage = (timeLeft / SESSION_DURATION) * 100;
-
   return (
-    <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} pb-20 select-none selection:bg-[#509BEC] transition-colors`}>
-      {/* Top Security Session Bar */}
-      <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white/95 border-slate-200 shadow-sm'} border-b sticky top-0 z-40 backdrop-blur-md px-4 py-2.5 shadow-md`}>
-        <div className="max-w-md mx-auto space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5 font-bold text-[#14798D] dark:text-[#509BEC]">
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              <span>{t.secureSession}</span>
+    <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} pb-24 selection:bg-[#14798D] selection:text-white transition-colors`}>
+      {/* Top Banner - Serene Modern Navy Teal */}
+      <div className="bg-gradient-to-r from-[#509BEC] via-[#14798D] to-[#509BEC] text-white px-4 py-3 shadow-lg shadow-[#509BEC]/20 sticky top-0 z-40">
+        <div className="max-w-2xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-white/15 text-white flex items-center justify-center backdrop-blur-sm">
+              <CreditCard className="w-5 h-5 text-[#D1C8B9]" />
             </div>
-            <div className={`flex items-center gap-1.5 font-mono ${isDark ? 'text-[#D1C8B9] bg-slate-950 border-slate-800' : 'text-slate-800 bg-slate-100 border-slate-200'} font-bold px-2 py-0.5 rounded-md border`}>
-              <Clock className="w-3.5 h-3.5 text-[#509BEC]" />
-              <span>00:{timeLeft < 10 ? `0${timeLeft}` : timeLeft}</span>
-            </div>
-          </div>
-
-          <div className={`w-full ${isDark ? 'bg-slate-800' : 'bg-slate-200'} h-1.5 rounded-full overflow-hidden`}>
-            <div 
-              className={`h-full transition-all duration-1000 rounded-full ${
-                timeLeft < 15 ? 'bg-amber-500' : 'bg-gradient-to-r from-[#14798D] to-[#509BEC]'
-              }`}
-              style={{ width: `${progressPercentage}%` }}
-            ></div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
-        {/* Owner Quick Edit Action Bar */}
-        {isOwner && onUpdatePersonal && (
-          <div className="flex items-center justify-between bg-[#509BEC]/15 border border-[#509BEC]/30 p-3 rounded-2xl">
-            <div className="flex items-center gap-2 text-xs font-bold text-[#509BEC]">
-              <ShieldCheck className="w-4 h-4" />
-              <span>{lang === 'tr' ? 'Sosyal Kart Yönetimi' : 'Social Card Management'}</span>
-            </div>
-            <button
-              onClick={() => { setEditForm(personal); setIsEditing(true); }}
-              className="bg-[#509BEC] hover:bg-[#4085d4] text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-98 transition-all"
-            >
-              <Edit3 className="w-3.5 h-3.5" />
-              <span>{lang === 'tr' ? 'Kartı Düzenle' : 'Edit Card'}</span>
-            </button>
-          </div>
-        )}
-
-        {/* Profile Card Header */}
-        <div className={`bg-gradient-to-br ${isDark ? 'from-slate-900 via-slate-900 to-[#14798D]/15 border-slate-800' : 'from-white via-white to-[#14798D]/10 border-slate-200 shadow-md'} border rounded-3xl p-5 shadow-xl relative overflow-hidden`}>
-          <div className="flex items-start justify-between">
             <div>
-              <h1 className={`text-xl font-black ${isDark ? 'text-white' : 'text-slate-900'} tracking-tight`}>{personal.fullName}</h1>
-              {personal.title && (
-                <p className="text-xs font-bold text-[#509BEC] mt-0.5">{personal.title}</p>
-              )}
-              {personal.company && (
-                <p className={`text-xs ${isDark ? 'text-slate-400' : 'text-slate-500'} flex items-center gap-1 mt-0.5`}>
-                  <Building2 className="w-3 h-3 text-[#14798D]" />
-                  {personal.company}
-                </p>
-              )}
-              {personal.city && (
-                <p className={`text-[11px] ${isDark ? 'text-[#D1C8B9]' : 'text-slate-500'} mt-1`}>{personal.city}</p>
-              )}
+              <div className="text-[10px] font-bold tracking-wider uppercase text-[#D1C8B9]">{lang === 'tr' ? 'Sosyal Kartvizit Profili' : 'Social Business Profile'}</div>
+              <div className="text-xs font-black tracking-wide text-white">{lang === 'tr' ? 'GÜVENLİ DİJİTAL KARTVİZİT & IBAN' : 'SECURE DIGITAL BUSINESS CARD & IBAN'}</div>
             </div>
-
-            <span className={`text-[10px] font-mono ${isDark ? 'bg-slate-950 text-[#D1C8B9] border-slate-800' : 'bg-slate-100 text-slate-700 border-slate-200'} px-2.5 py-1 rounded-xl border font-bold`}>
-              {cardId}
+          </div>
+          <div className="text-right">
+            <span className="text-[10px] font-mono text-[#D1C8B9] block font-semibold">{cardId}</span>
+            <span className="inline-flex items-center gap-1 text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full border border-emerald-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+              {t.secureSession}
             </span>
           </div>
+        </div>
+      </div>
 
-          {personal.bio && (
-            <p className={`mt-3 pt-3 border-t ${isDark ? 'border-slate-800 text-slate-300' : 'border-slate-200 text-slate-700'} text-xs leading-relaxed`}>
-              {personal.bio}
-            </p>
-          )}
+      <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
+        {/* Responsive Sub-Tabs Navigation */}
+        <div className={`flex p-1.5 rounded-2xl border ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} gap-1 text-xs font-bold`}>
+          <button
+            onClick={() => setActiveSubTab('details')}
+            className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
+              activeSubTab === 'details'
+                ? 'bg-[#509BEC] text-white shadow-md'
+                : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>{lang === 'tr' ? 'sosyal kart bilgileri/ düzenle' : 'Social Card Info / Edit'}</span>
+          </button>
 
-          {/* Action Row */}
-          <div className={`mt-4 pt-3 border-t ${isDark ? 'border-slate-800' : 'border-slate-200'} flex items-center gap-2`}>
-            <button
-              onClick={() => downloadVCardFile(personal)}
-              className="flex-1 bg-[#509BEC] hover:bg-[#4085d4] text-white text-xs font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md shadow-[#509BEC]/20 active:scale-98"
-            >
-              <Download className="w-4 h-4" />
-              <span>{t.saveVCard}</span>
-            </button>
-            <a
-              href={`https://wa.me/${personal.phone.replace(/[^0-9]/g, '')}?text=Merhaba%20${encodeURIComponent(personal.fullName)},%20akıllı%20kartınız%20üzerinden%20ulaşıyorum.`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-md shadow-emerald-900/20 active:scale-98"
-            >
-              <MessageSquare className="w-4 h-4" />
-              <span>{t.whatsapp}</span>
-            </a>
-          </div>
+          <button
+            onClick={() => setActiveSubTab('qr')}
+            className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
+              activeSubTab === 'qr'
+                ? 'bg-[#509BEC] text-white shadow-md'
+                : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <QrCode className="w-4 h-4" />
+            <span>{lang === 'tr' ? 'sosyal kart QR' : 'Social Card QR'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('nfc')}
+            className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
+              activeSubTab === 'nfc'
+                ? 'bg-[#509BEC] text-white shadow-md'
+                : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Wifi className="w-4 h-4 rotate-90" />
+            <span>{lang === 'tr' ? 'sosyal kart NFC' : 'Social Card NFC'}</span>
+          </button>
         </div>
 
-        {/* Bank & IBAN Accounts */}
-        <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border rounded-3xl p-4 space-y-3 shadow-lg`}>
-          <div className="flex items-center justify-between">
-            <h2 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'} uppercase tracking-wider flex items-center gap-2`}>
-              <CreditCard className="w-4 h-4 text-[#509BEC]" />
-              {t.bankInfo}
-            </h2>
-            <span className={`text-[10px] ${isDark ? 'text-slate-400 bg-slate-800' : 'text-slate-600 bg-slate-100'} px-2 py-0.5 rounded font-medium`}>{t.oneClickCopy}</span>
-          </div>
-
-          <div className="space-y-3">
-            {personal.bankAccounts.map((account) => {
-              const isCopied = copiedIbanId === account.id;
-              return (
-                <div 
-                  key={account.id}
-                  className={`${isDark ? 'bg-slate-950 border-slate-800 hover:border-[#14798D]/50' : 'bg-slate-50 border-slate-200 hover:border-[#14798D]/40'} border rounded-2xl p-3.5 space-y-2.5 transition-colors`}
+        {/* ----------------- SUB-TAB 1: SOCIAL CARD DETAILS & EDIT ----------------- */}
+        {activeSubTab === 'details' && (
+          <div className="space-y-4">
+            {/* Owner Quick Edit Action Bar */}
+            {isOwner && onUpdatePersonal && (
+              <div className="flex items-center justify-between bg-[#509BEC]/15 border border-[#509BEC]/30 p-3 rounded-2xl">
+                <div className="flex items-center gap-2 text-xs font-bold text-[#509BEC]">
+                  <Sparkles className="w-4 h-4" />
+                  <span>{lang === 'tr' ? 'Sosyal Kart Sahibi Modu' : 'Social Card Owner Mode'}</span>
+                </div>
+                <button
+                  onClick={() => { setEditForm(personal); setIsEditing(true); }}
+                  className="bg-[#509BEC] hover:bg-[#3b85d9] text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-98 transition-all"
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-7 h-7 rounded-lg bg-[#14798D]/20 text-[#509BEC] flex items-center justify-center font-bold text-xs border border-[#14798D]/30">
-                        {account.bankName.charAt(0)}
+                  <Edit3 className="w-3.5 h-3.5" />
+                  <span>{lang === 'tr' ? 'Kartı Düzenle' : 'Edit Card'}</span>
+                </button>
+              </div>
+            )}
+
+            {/* Timed Session Bar with Ephemeral Clipboard Warning */}
+            <div className={`p-3.5 rounded-2xl border flex items-center justify-between transition-all ${
+              isLocked 
+                ? 'bg-rose-950/40 border-rose-800/80 text-rose-300' 
+                : timeLeft < 15
+                  ? 'bg-amber-950/40 border-amber-800/80 text-amber-300 animate-pulse'
+                  : isDark ? 'bg-slate-900/80 border-slate-800 text-slate-300' : 'bg-white border-slate-200 text-slate-700 shadow-sm'
+            }`}>
+              <div className="flex items-center gap-2.5 text-xs font-semibold">
+                <Clock className={`w-4 h-4 ${isLocked ? 'text-rose-400' : 'text-[#509BEC]'}`} />
+                <span>
+                  {isLocked 
+                    ? t.sessionExpiredTitle
+                    : `${lang === 'tr' ? 'Gizlilik Sayacı' : 'Privacy Timer'}: ${timeLeft}s`}
+                </span>
+              </div>
+
+              {isLocked ? (
+                <button
+                  onClick={handleResetSession}
+                  className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1 shadow-md transition-all"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>{lang === 'tr' ? 'Oturumu Aç' : 'Unlock Session'}</span>
+                </button>
+              ) : (
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {clipboardTimer ? `✂️ Pano ${clipboardTimer}s sonra silinecek` : '🛡️ Pano Güvenliği Aktif'}
+                </span>
+              )}
+            </div>
+
+            {/* Locked State Notification */}
+            {isLocked ? (
+              <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border rounded-3xl p-8 text-center space-y-4`}>
+                <div className="w-16 h-16 rounded-2xl bg-rose-500/10 text-rose-500 flex items-center justify-center mx-auto border border-rose-500/20">
+                  <Lock className="w-8 h-8" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-base font-bold">{t.sessionExpiredTitle}</h3>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    {t.sessionExpiredDesc}
+                  </p>
+                </div>
+                <button
+                  onClick={handleResetSession}
+                  className="bg-[#509BEC] hover:bg-[#3b85d9] text-white text-xs font-bold py-2.5 px-6 rounded-xl shadow-lg transition-all"
+                >
+                  {lang === 'tr' ? 'Oturumu Aç' : 'Unlock Session'}
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Digital Card Profile Header */}
+                <section className={`${isDark ? 'bg-slate-900/95 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-6 relative overflow-hidden transition-colors`}>
+                  <div className="absolute top-0 right-0 w-36 h-36 bg-[#509BEC]/10 rounded-full blur-2xl pointer-events-none -mr-10 -mt-10"></div>
+                  
+                  <div className="space-y-4 relative z-10">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-[#509BEC]">
+                          <Sparkles className="w-3.5 h-3.5" />
+                          <span>{lang === 'tr' ? 'Dijital Kartvizit' : 'Digital Business Card'}</span>
+                        </div>
+                        <h1 className="text-xl sm:text-2xl font-black tracking-tight">{personal.fullName}</h1>
+                        <p className="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                          <span>{personal.title}</span>
+                          <span>•</span>
+                          <span className="flex items-center gap-1 text-[#14798D] dark:text-[#509BEC]">
+                            <Building2 className="w-3 h-3" />
+                            {personal.company}
+                          </span>
+                        </p>
                       </div>
-                      <span className={`text-xs font-bold ${isDark ? 'text-slate-200' : 'text-slate-800'}`}>{account.bankName}</span>
+
+                      <button
+                        onClick={() => downloadVCardFile(personal)}
+                        className="shrink-0 bg-gradient-to-tr from-[#14798D] to-[#509BEC] hover:opacity-90 text-white p-3 rounded-2xl shadow-lg shadow-[#509BEC]/20 flex flex-col items-center justify-center gap-1 active:scale-95 transition-all"
+                        title={t.saveVCard}
+                      >
+                        <Download className="w-4 h-4" />
+                        <span className="text-[10px] font-bold uppercase tracking-wider">{t.saveVCard}</span>
+                      </button>
                     </div>
-                    <span className={`text-[10px] font-mono ${isDark ? 'bg-slate-900 text-[#D1C8B9] border-slate-800' : 'bg-white text-slate-700 border-slate-200'} px-2 py-0.5 rounded border font-bold`}>
-                      {account.currency}
+
+                    {personal.bio && (
+                      <p className={`text-xs leading-relaxed ${isDark ? 'text-slate-300' : 'text-slate-600'} border-t border-slate-800/60 pt-3`}>
+                        {personal.bio}
+                      </p>
+                    )}
+
+                    {/* Quick Action Contact Pills */}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {personal.phone && (
+                        <a
+                          href={`tel:${personal.phone}`}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                            isDark ? 'bg-slate-950 border-slate-800 hover:border-[#509BEC] text-slate-200' : 'bg-slate-50 border-slate-200 hover:border-[#14798D] text-slate-800'
+                          }`}
+                        >
+                          <Phone className="w-3.5 h-3.5 text-[#509BEC]" />
+                          <span>{personal.phone}</span>
+                        </a>
+                      )}
+                      {personal.email && (
+                        <a
+                          href={`mailto:${personal.email}`}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${
+                            isDark ? 'bg-slate-950 border-slate-800 hover:border-[#509BEC] text-slate-200' : 'bg-slate-50 border-slate-200 hover:border-[#14798D] text-slate-800'
+                          }`}
+                        >
+                          <Mail className="w-3.5 h-3.5 text-[#14798D]" />
+                          <span>{personal.email}</span>
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                {/* Bank Accounts & IBAN Safe Vault */}
+                <section className="space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <CreditCard className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{t.bankInfo}</span>
+                    </h2>
+                    <span className="text-[10px] text-emerald-400 font-mono font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                      {t.oneClickCopy} (30s Pano Korumalı)
                     </span>
                   </div>
 
-                  <div className={`${isDark ? 'bg-slate-900/80 border-slate-800/80' : 'bg-white border-slate-200'} border rounded-xl p-2.5 flex items-center justify-between gap-2`}>
-                    <div className={`font-mono text-xs ${isDark ? 'text-[#D1C8B9]' : 'text-[#14798D]'} tracking-wider break-all font-bold`}>
-                      {account.iban}
+                  <div className="space-y-2.5">
+                    {personal.bankAccounts.map((bank, idx) => (
+                      <div
+                        key={bank.id || idx}
+                        className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-2xl p-4 flex items-center justify-between gap-3 transition-all`}
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold">{bank.bankName}</span>
+                            <span className="text-[10px] bg-slate-800 text-slate-300 font-mono px-1.5 py-0.5 rounded">{bank.currency || 'TRY'}</span>
+                          </div>
+                          <div className="text-xs font-mono font-semibold text-[#509BEC] tracking-wide break-all">
+                            {bank.iban}
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleCopyIban(bank.id || idx.toString(), bank.iban)}
+                          className={`p-3 rounded-xl border text-xs font-bold flex items-center gap-1.5 shrink-0 transition-all ${
+                            copiedIbanId === (bank.id || idx.toString())
+                              ? 'bg-emerald-600 text-white border-emerald-500 shadow-md'
+                              : isDark ? 'bg-slate-950 border-slate-800 hover:bg-slate-800 text-slate-200' : 'bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-800'
+                          }`}
+                        >
+                          {copiedIbanId === (bank.id || idx.toString()) ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                          <span className="hidden sm:inline">
+                            {copiedIbanId === (bank.id || idx.toString()) ? t.copiedBtn : t.copyBtn}
+                          </span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+
+                {/* Social Media & Website Links */}
+                {personal.socialLinks && personal.socialLinks.length > 0 && (
+                  <section className="space-y-2.5">
+                    <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <ExternalLink className="w-3.5 h-3.5 text-[#509BEC]" />
+                      <span>{t.contacts}</span>
+                    </h2>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {personal.socialLinks.map((link, idx) => (
+                        <a
+                          key={link.id || idx}
+                          href={link.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={`p-3 rounded-2xl border flex items-center justify-between transition-all ${
+                            isDark ? 'bg-slate-900/90 border-slate-800 hover:border-[#509BEC] text-slate-200' : 'bg-white border-slate-200 hover:border-[#14798D] text-slate-800 shadow-sm'
+                          }`}
+                        >
+                          <span className="text-xs font-bold">{link.title}</span>
+                          <ExternalLink className="w-3.5 h-3.5 opacity-50" />
+                        </a>
+                      ))}
                     </div>
-                    <button
-                      onClick={() => handleCopyIban(account.id, account.iban)}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all shadow-sm ${
-                        isCopied 
-                          ? 'bg-emerald-600 text-white' 
-                          : 'bg-[#509BEC] hover:bg-[#4085d4] text-white active:scale-98'
-                      }`}
-                    >
-                      {isCopied ? (
-                        <>
-                          <Check className="w-3.5 h-3.5" />
-                          <span>{t.copiedBtn}</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>{t.copyBtn}</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-
-                  <div className={`text-[11px] ${isDark ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {t.accountHolder}: <span className={`${isDark ? 'text-slate-200' : 'text-slate-800'} font-semibold`}>{account.accountHolder}</span>
-                  </div>
-                </div>
-              );
-            })}
+                  </section>
+                )}
+              </>
+            )}
           </div>
+        )}
 
-          {clipboardTimer !== null && (
-            <div className="bg-emerald-950/80 border border-emerald-500/40 rounded-xl p-2.5 flex items-center gap-2 text-xs text-emerald-300">
-              <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>{t.clipboardAlert} (<strong>{clipboardTimer}s</strong>)</span>
+        {/* ----------------- SUB-TAB 2: SOCIAL CARD QR ----------------- */}
+        {activeSubTab === 'qr' && (
+          <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-6 space-y-6 text-center transition-colors`}>
+            <div>
+              <h2 className="text-base font-bold flex items-center justify-center gap-2">
+                <QrCode className="w-5 h-5 text-[#509BEC]" />
+                <span>{lang === 'tr' ? 'Sosyal Kartvizit QR Kodu' : 'Social Card QR Code'}</span>
+              </h2>
+              <p className="text-xs text-slate-400 mt-1">
+                {lang === 'tr' ? 'Kartınızın arka yüzü, e-posta imzası veya sunumlar için dijital kartvizit QR kodu' : 'Digital business card QR for card back, email signatures or presentations'}
+              </p>
             </div>
-          )}
-        </div>
 
-        {/* Quick Contact & Socials */}
-        <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border rounded-3xl p-4 space-y-3 shadow-lg`}>
-          <h2 className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'} uppercase tracking-wider flex items-center gap-2`}>
-            <Sparkles className="w-4 h-4 text-[#509BEC]" />
-            {t.contacts}
-          </h2>
+            {/* The QR Container */}
+            <div className="bg-white p-5 rounded-3xl inline-block shadow-2xl mx-auto border-4 border-[#509BEC]/30">
+              <QRCodeSVG id="social-card-qr" value={personalUrl} size={180} level="H" includeMargin />
+            </div>
 
-          <div className="grid grid-cols-2 gap-2">
-            <a
-              href={`tel:${personal.phone}`}
-              className={`${isDark ? 'bg-slate-950 hover:bg-slate-800 border-slate-800' : 'bg-slate-50 hover:bg-slate-100 border-slate-200'} border rounded-2xl p-3 flex items-center gap-2.5 transition-colors`}
-            >
-              <div className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
-                <Phone className="w-4 h-4" />
+            {/* Quick Summary under QR */}
+            <div className="space-y-1">
+              <div className="text-sm font-bold">{personal.fullName}</div>
+              <div className="text-xs font-mono font-bold text-[#509BEC]">
+                {personal.title} • {personal.company}
               </div>
-              <div className="overflow-hidden">
-                <div className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'} uppercase font-semibold`}>{t.phone}</div>
-                <div className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'} truncate`}>{personal.phone}</div>
+              <div className="text-[11px] text-slate-400 font-mono break-all pt-1 max-w-sm mx-auto">
+                {personalUrl}
               </div>
-            </a>
+            </div>
 
-            <a
-              href={`mailto:${personal.email}`}
-              className={`${isDark ? 'bg-slate-950 hover:bg-slate-800 border-slate-800' : 'bg-slate-50 hover:bg-slate-100 border-slate-200'} border rounded-2xl p-3 flex items-center gap-2.5 transition-colors`}
-            >
-              <div className="w-8 h-8 rounded-xl bg-[#509BEC]/10 text-[#509BEC] flex items-center justify-center">
-                <Mail className="w-4 h-4" />
-              </div>
-              <div className="overflow-hidden">
-                <div className={`text-[10px] ${isDark ? 'text-slate-400' : 'text-slate-500'} uppercase font-semibold`}>{t.email}</div>
-                <div className={`text-xs font-bold ${isDark ? 'text-white' : 'text-slate-900'} truncate`}>{personal.email}</div>
-              </div>
-            </a>
-          </div>
-
-          <div className="space-y-2 pt-1">
-            {personal.socialLinks.map((link) => (
-              <a
-                key={link.id}
-                href={link.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`flex items-center justify-between p-3 ${isDark ? 'bg-slate-950 hover:bg-slate-800 border-slate-800 hover:border-[#14798D]/40 text-slate-200' : 'bg-slate-50 hover:bg-slate-100 border-slate-200 hover:border-[#14798D]/40 text-slate-700'} border rounded-2xl text-xs transition-colors group`}
+            {/* Actions: Copy Link & Print */}
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+              <button
+                onClick={handleCopyLink}
+                className={`flex-1 py-3 px-4 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+                  copiedLink 
+                    ? 'bg-emerald-600 text-white border-emerald-500' 
+                    : isDark ? 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
+                }`}
               >
-                <div className="flex items-center gap-2 font-medium">
-                  <ExternalLink className={`w-3.5 h-3.5 ${isDark ? 'text-slate-400 group-hover:text-[#509BEC]' : 'text-slate-500 group-hover:text-[#14798D]'}`} />
-                  <span>{link.title}</span>
+                {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                <span>{copiedLink ? (lang === 'tr' ? 'Bağlantı Kopyalandı!' : 'Link Copied!') : (lang === 'tr' ? 'Kartvizit Linkini Kopyala' : 'Copy Business Card Link')}</span>
+              </button>
+
+              <button
+                onClick={() => window.print()}
+                className="flex-1 py-3 px-4 rounded-xl bg-[#509BEC] hover:bg-[#3b85d9] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all"
+              >
+                <Printer className="w-4 h-4" />
+                <span>{lang === 'tr' ? 'Kartvizit Yazdır / PDF' : 'Print Card / PDF'}</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ----------------- SUB-TAB 3: SOCIAL CARD NFC ----------------- */}
+        {activeSubTab === 'nfc' && (
+          <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-6 space-y-5 transition-colors`}>
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#509BEC]/15 text-[#509BEC] flex items-center justify-center border border-[#509BEC]/30">
+                  <Wifi className="w-5 h-5 rotate-90" />
                 </div>
-                <span className={`text-[11px] ${isDark ? 'text-slate-500 group-hover:text-[#509BEC]' : 'text-slate-500 group-hover:text-[#14798D]'} font-mono`}>{t.visit} &rarr;</span>
-              </a>
-            ))}
-          </div>
-        </div>
+                <div>
+                  <h2 className="text-base font-bold">{lang === 'tr' ? 'Sosyal Kart NFC Yükü' : 'Social Card NFC Payload'}</h2>
+                  <p className="text-xs text-slate-400">{lang === 'tr' ? 'NFC dokunuşuyla rehbere ekleme ve kartvizit açma yükü' : 'NFC tap-to-save vCard & profile URL payload'}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[11px] font-mono text-slate-400 block">{nfcByteCount} / 888 Byte</span>
+                <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/30">
+                  NTAG216
+                </span>
+              </div>
+            </div>
 
-        {personal.customNotes && (
-          <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border rounded-3xl p-4 space-y-1.5 shadow-lg`}>
-            <h3 className={`text-xs font-bold ${isDark ? 'text-[#D1C8B9]' : 'text-[#14798D]'} uppercase`}>{t.customNotes}</h3>
-            <p className={`text-xs ${isDark ? 'text-slate-300' : 'text-slate-600'} leading-relaxed`}>{personal.customNotes}</p>
+            {/* Raw Payload Preview Box */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-slate-400">
+                <span>{lang === 'tr' ? 'NFC Çipine Yazılacak vCard / Metin:' : 'vCard / Text Payload for NFC:'}</span>
+                <button
+                  onClick={handleCopyNfc}
+                  className="text-xs font-semibold text-[#509BEC] hover:text-[#4085d4] flex items-center gap-1"
+                >
+                  {copiedNfc ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+                  <span>{copiedNfc ? (lang === 'tr' ? 'Kopyalandı!' : 'Copied!') : (lang === 'tr' ? 'Metni Kopyala' : 'Copy Text')}</span>
+                </button>
+              </div>
+
+              <pre className={`${isDark ? 'bg-slate-950 border-slate-800 text-slate-300' : 'bg-slate-50 border-slate-200 text-slate-800'} border p-4 rounded-2xl text-xs font-mono whitespace-pre-wrap leading-relaxed`}>
+                {nfcVCardPayload}
+              </pre>
+            </div>
+
+            {/* 3 Step NFC Write Guide */}
+            <div className={`${isDark ? 'bg-slate-950/80 border-slate-800' : 'bg-slate-50 border-slate-200'} border rounded-2xl p-4 space-y-3`}>
+              <h3 className="text-xs font-bold flex items-center gap-2 text-[#509BEC]">
+                <Smartphone className="w-4 h-4" />
+                <span>{lang === 'tr' ? 'NFC Kartvizit Olarak Nasıl Kodlanır?' : 'How to Encode as NFC Business Card?'}</span>
+              </h3>
+
+              <ol className="text-xs text-slate-400 space-y-2 pl-4 list-decimal">
+                <li>
+                  {lang === 'tr' ? 'Telefonunuzda "NFC Tools" uygulamasını açın.' : 'Open "NFC Tools" app on your smartphone.'}
+                </li>
+                <li>
+                  {lang === 'tr' ? '"Yaz (Write)" → "Kayıt Ekle (Add a record)" → "URL veya vCard" seçin.' : 'Select "Write" → "Add a record" → "URL or vCard".'}
+                </li>
+                <li>
+                  {lang === 'tr' ? 'İster yukarıdaki vCard metnini ister kartvizit bağlantınızı yapıştırıp kartınıza dokundurun!' : 'Paste the vCard or profile link above and tap your card!'}
+                </li>
+              </ol>
+            </div>
           </div>
         )}
 
-        <div className={`text-center pt-2 ${isDark ? 'text-slate-500' : 'text-slate-400'} text-[11px] flex items-center justify-center gap-1.5`}>
-          <AlertCircle className="w-3.5 h-3.5" />
-          <span>{t.disclaimer}</span>
-        </div>
+      </div>
 
-        {isPublicScan && onOpenAuth && (
-          <div className="text-center pt-3 pb-6">
-            <button
-              onClick={onOpenAuth}
-              className={`text-xs ${isDark ? 'text-slate-400 hover:text-white bg-slate-900 border-slate-800' : 'text-slate-600 hover:text-slate-900 bg-white border-slate-200'} border px-4 py-2 rounded-xl transition-all inline-flex items-center gap-1.5 shadow-sm`}
-            >
-              <CreditCard className="w-3.5 h-3.5 text-[#509BEC]" />
-              <span>{lang === 'tr' ? 'Kart Sahibi misiniz? Giriş Yapın & Düzenleyin' : 'Card Owner? Sign In & Edit'}</span>
-            </button>
-          </div>
-        )}
-      </main>
-
-      {/* In-Page Social Card Edit Modal */}
-      {isEditing && (
+      {/* In-Page Owner Edit Modal */}
+      {isOwner && isEditing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div onClick={() => setIsEditing(false)} className="fixed inset-0 bg-black/65 backdrop-blur-sm" />
-          <div className={`relative w-full max-w-xl ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-3xl p-6 shadow-2xl z-10 space-y-4 max-h-[90vh] overflow-y-auto`}>
+          <div 
+            onClick={() => setIsEditing(false)} 
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm transition-opacity" 
+          />
+
+          <div className={`relative w-full max-w-lg ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-3xl p-6 shadow-2xl z-10 max-h-[90vh] overflow-y-auto space-y-5`}>
             
-            <div className="flex items-center justify-between pb-3 border-b border-slate-700/40">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-700">
               <div className="flex items-center gap-2">
                 <Edit3 className="w-5 h-5 text-[#509BEC]" />
                 <h3 className="font-bold text-base">{lang === 'tr' ? 'Sosyal Kart Bilgilerini Düzenle' : 'Edit Social Card Info'}</h3>
               </div>
-              <button onClick={() => setIsEditing(false)} className="p-1.5 rounded-lg border border-slate-700 hover:bg-slate-800">
+              <button 
+                onClick={() => setIsEditing(false)}
+                className={`p-1.5 rounded-xl border ${isDark ? 'border-slate-700 hover:bg-slate-800' : 'border-slate-200 hover:bg-slate-100'}`}
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
-              {/* Profile Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Full Name & Title */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Ad Soyad' : 'Full Name'}</label>
                   <input
                     type="text"
                     value={editForm.fullName}
                     onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
-                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
                     required
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Unvan / Pozisyon' : 'Title / Role'}</label>
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Unvan / Pozisyon' : 'Title'}</label>
                   <input
                     type="text"
-                    value={editForm.title || ''}
+                    value={editForm.title}
                     onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
                     className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {/* Company & Phone */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Şirket / Marka' : 'Company'}</label>
                   <input
                     type="text"
-                    value={editForm.company || ''}
+                    value={editForm.company}
                     onChange={(e) => setEditForm({ ...editForm, company: e.target.value })}
                     className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Telefon' : 'Phone'}</label>
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Telefon Numarası' : 'Phone'}</label>
                   <input
                     type="text"
                     value={editForm.phone}
                     onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'E-posta' : 'Email'}</label>
-                  <input
-                    type="email"
-                    value={editForm.email}
-                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Bio & City */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Biyografi' : 'Bio'}</label>
-                  <input
-                    type="text"
-                    value={editForm.bio || ''}
-                    onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
-                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Şehir' : 'City'}</label>
-                  <input
-                    type="text"
-                    value={editForm.city || ''}
-                    onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                    placeholder="+90 5XX..."
                     className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
                   />
                 </div>
               </div>
 
-              {/* Bank Accounts (IBANs) */}
+              {/* Email & Bio */}
+              <div className="space-y-1">
+                <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'E-posta Adresi' : 'Email'}</label>
+                <input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Hakkımda / Biyografi' : 'Bio'}</label>
+                <textarea
+                  value={editForm.bio || ''}
+                  onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                  rows={2}
+                  className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                />
+              </div>
+
+              {/* Bank Accounts */}
               <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <label className="font-bold text-emerald-400 uppercase tracking-wider">{lang === 'tr' ? 'Banka Hesapları & IBAN' : 'Bank Accounts & IBAN'}</label>
+                <label className="font-bold text-emerald-400 uppercase tracking-wider">{lang === 'tr' ? 'Banka Hesapları (IBAN)' : 'Bank Accounts (IBAN)'}</label>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <input
                     type="text"
                     value={newBankName}
                     onChange={(e) => setNewBankName(e.target.value)}
-                    placeholder={lang === 'tr' ? 'Banka Adı (Örn: Garanti)' : 'Bank Name'}
+                    placeholder={lang === 'tr' ? 'Banka Adı (Örn: Ziraat)' : 'Bank Name'}
                     className={`p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
                   />
                   <div className="sm:col-span-2 flex gap-2">
