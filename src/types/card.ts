@@ -1,4 +1,4 @@
-﻿export type BloodType = '0 Rh+' | '0 Rh-' | 'A Rh+' | 'A Rh-' | 'B Rh+' | 'B Rh-' | 'AB Rh+' | 'AB Rh-';
+export type BloodType = '0 Rh+' | '0 Rh-' | 'A Rh+' | 'A Rh-' | 'B Rh+' | 'B Rh-' | 'AB Rh+' | 'AB Rh-';
 
 export interface EmergencyContact {
   id: string;
@@ -50,11 +50,23 @@ export interface PersonalInfo {
   customNotes?: string;
 }
 
+export interface VehicleInfo {
+  plateNumber: string;
+  brandModel: string;
+  ownerName: string;
+  ownerPhone: string;
+  emergencyContact?: string;
+  parkingNote: string;
+  insuranceStatus?: string;
+}
+
 export interface SmartCard {
   cardId: string; // örn: MED-749123
   pinCode?: string;
   medical: MedicalInfo;
   personal: PersonalInfo;
+  vehicle?: VehicleInfo;
   createdAt: string;
   updatedAt: string;
 }
+

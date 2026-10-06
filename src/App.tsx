@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldAlert, CreditCard, LayoutDashboard, QrCode, KeyRound, 
-  Globe, Sun, Moon, LogIn, LogOut, User as UserIcon, Home, Menu, X, CarFront 
+  Globe, Sun, Moon, LogIn, LogOut, User as UserIcon, Home, Menu, X, CarFront,
+  HelpCircle, FileText
 } from 'lucide-react';
-import { SmartCard } from './types/card';
+import { SmartCard, MedicalInfo, PersonalInfo, VehicleInfo } from './types/card';
 import { getStoredCardData, clearStoredCardData, DEMO_CARD_DATA } from './lib/storage';
 import { LandingHeroView } from './components/LandingHeroView';
 import { MedicalSOSView } from './components/MedicalSOSView';
@@ -14,6 +15,9 @@ import { QrCodeExporter } from './components/QrCodeExporter';
 import { NfcPayloadHelper } from './components/NfcPayloadHelper';
 import { CryptoVaultView } from './components/CryptoVaultView';
 import { AuthModal } from './components/AuthModal';
+import { AccountProfileModal } from './components/AccountProfileModal';
+import { HelpSupportModal } from './components/HelpSupportModal';
+import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { subscribeToAuth, logoutUser } from './lib/authService';
 import { fetchCardFromFirestore, fetchUserCard, saveCardToFirestore, listenToCardUpdates } from './lib/firestoreService';
 import { User } from 'firebase/auth';
@@ -28,6 +32,9 @@ export function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isAccountModalOpen, setIsAccountModalOpen] = useState(false);
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState(false);
   const [language, setLanguage] = useState<Language>(() => {
     return (localStorage.getItem('smart_card_lang') as Language) || 'tr';
   });
@@ -58,7 +65,8 @@ export function App() {
               ...DEMO_CARD_DATA.personal,
               fullName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kart Sahibi',
               email: currentUser.email || '',
-            }
+            },
+            vehicle: DEMO_CARD_DATA.vehicle
           };
           await saveCardToFirestore(initialUserCard, currentUser.uid);
           setCard(initialUserCard);
@@ -138,6 +146,32 @@ export function App() {
     setActiveTab('home');
     setIsPublicScan(false);
     setIsDrawerOpen(false);
+    setIsAccountModalOpen(false);
+  };
+
+  // Decentralized in-page update handlers
+  const handleUpdateMedical = async (updatedMed: MedicalInfo) => {
+    const updated = { ...card, medical: updatedMed };
+    setCard(updated);
+    if (user) {
+      await saveCardToFirestore(updated, user.uid);
+    }
+  };
+
+  const handleUpdatePersonal = async (updatedPers: PersonalInfo) => {
+    const updated = { ...card, personal: updatedPers };
+    setCard(updated);
+    if (user) {
+      await saveCardToFirestore(updated, user.uid);
+    }
+  };
+
+  const handleUpdateVehicle = async (updatedVeh: VehicleInfo) => {
+    const updated = { ...card, vehicle: updatedVeh };
+    setCard(updated);
+    if (user) {
+      await saveCardToFirestore(updated, user.uid);
+    }
   };
 
   const t = translations[language];
@@ -302,17 +336,20 @@ export function App() {
 
               {/* Başlıklar / Sekmeler Listesi */}
               <div className="mt-6 space-y-2">
-                
+                <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 px-3 pt-1">
+                  {language === 'tr' ? 'Kartlarım' : 'My Cards'}
+                </div>
+
                 {/* 1. Sağlık Kartı */}
                 <button
                   onClick={() => handleNavigate('sos')}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left ${
                     activeTab === 'sos'
                       ? 'bg-[#14798D] text-white shadow-md'
                       : isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
                   }`}
                 >
-                  <ShieldAlert className="w-5 h-5 text-rose-500" />
+                  <ShieldAlert className="w-5 h-5 text-rose-500 shrink-0" />
                   <div>
                     <div className="flex items-center gap-2">
                       <span>{language === 'tr' ? 'Sağlık Kartı' : 'Health Card'}</span>
@@ -325,29 +362,29 @@ export function App() {
                 {/* 2. Sosyal Kart */}
                 <button
                   onClick={() => handleNavigate('personal')}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left ${
                     activeTab === 'personal'
                       ? 'bg-[#509BEC] text-white shadow-md'
                       : isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
                   }`}
                 >
-                  <CreditCard className="w-5 h-5 text-[#D1C8B9]" />
+                  <CreditCard className="w-5 h-5 text-[#D1C8B9] shrink-0" />
                   <div>
                     <div>{language === 'tr' ? 'Sosyal Kart' : 'Social Card'}</div>
                     <div className="text-[11px] opacity-70">{language === 'tr' ? '30 sn süreli güvenli pano & kartvizit' : 'Timed clipboard & business card'}</div>
                   </div>
                 </button>
 
-                {/* 3. Araç Kartı (YENİ) */}
+                {/* 3. Araç Kartı */}
                 <button
                   onClick={() => handleNavigate('vehicle')}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left ${
                     activeTab === 'vehicle'
                       ? 'bg-amber-600 text-white shadow-md'
                       : isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
                   }`}
                 >
-                  <CarFront className="w-5 h-5 text-amber-400" />
+                  <CarFront className="w-5 h-5 text-amber-400 shrink-0" />
                   <div>
                     <div className="flex items-center gap-2">
                       <span>{language === 'tr' ? 'Araç Kartı' : 'Vehicle Card'}</span>
@@ -357,53 +394,77 @@ export function App() {
                   </div>
                 </button>
 
+                <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 px-3 pt-3">
+                  {language === 'tr' ? 'Güvenlik & Donanım' : 'Security & Tools'}
+                </div>
+
                 {/* 4. Kripto Kasa */}
                 <button
                   onClick={() => handleNavigate('vault')}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left ${
                     activeTab === 'vault'
                       ? (isDark ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-900')
                       : isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
                   }`}
                 >
-                  <KeyRound className="w-5 h-5 text-amber-400" />
+                  <KeyRound className="w-5 h-5 text-amber-400 shrink-0" />
                   <div>
                     <div>{language === 'tr' ? 'Kripto Kasa' : 'Crypto Vault'}</div>
                     <div className="text-[11px] opacity-70">{language === 'tr' ? 'AES-256 sıfır bilgi şifreli kasa' : 'Zero-knowledge encrypted storage'}</div>
                   </div>
                 </button>
 
-                {/* 5. Yönetim Paneli */}
-                <button
-                  onClick={() => handleNavigate('dashboard')}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
-                    activeTab === 'dashboard'
-                      ? (isDark ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-900')
-                      : isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
-                  }`}
-                >
-                  <LayoutDashboard className="w-5 h-5 text-[#14798D]" />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span>{language === 'tr' ? 'Yönetim Paneli' : 'Admin Dashboard'}</span>
-                    </div>
-                    <div className="text-[11px] opacity-70">{language === 'tr' ? 'Kart bilgileri ve sağlık kaydı düzenle' : 'Edit medical and card data'}</div>
-                  </div>
-                </button>
-
-                {/* 6. QR & NFC Baskı Merkezi */}
+                {/* 5. QR & NFC Baskı Merkezi */}
                 <button
                   onClick={() => handleNavigate('print_nfc')}
-                  className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-sm font-semibold transition-all text-left ${
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left ${
                     activeTab === 'print_nfc'
                       ? (isDark ? 'bg-slate-800 text-white' : 'bg-slate-200 text-slate-900')
                       : isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
                   }`}
                 >
-                  <QrCode className="w-5 h-5 text-[#509BEC]" />
+                  <QrCode className="w-5 h-5 text-[#509BEC] shrink-0" />
                   <div>
                     <div>{language === 'tr' ? 'QR & NFC Baskı Merkezi' : 'QR & NFC Print Center'}</div>
                     <div className="text-[11px] opacity-70">{language === 'tr' ? 'Fiziksel karta aktarım ve QR baskı' : 'Export QR codes & NFC payloads'}</div>
+                  </div>
+                </button>
+
+                <div className="text-[10px] font-bold tracking-wider uppercase text-slate-400 px-3 pt-3">
+                  {language === 'tr' ? 'Destek & Yasal' : 'Support & Legal'}
+                </div>
+
+                {/* 6. Yardım & SSS */}
+                <button
+                  onClick={() => {
+                    setIsDrawerOpen(false);
+                    setIsHelpModalOpen(true);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left ${
+                    isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  <HelpCircle className="w-5 h-5 text-cyan-400 shrink-0" />
+                  <div>
+                    <div>{language === 'tr' ? 'Yardım & SSS' : 'Help & FAQ'}</div>
+                    <div className="text-[11px] opacity-70">{language === 'tr' ? 'NFC kullanımı, SOS ve sık sorulanlar' : 'NFC guide, emergency & questions'}</div>
+                  </div>
+                </button>
+
+                {/* 7. Gizlilik & KVKK */}
+                <button
+                  onClick={() => {
+                    setIsDrawerOpen(false);
+                    setIsPrivacyModalOpen(true);
+                  }}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all text-left ${
+                    isDark ? 'hover:bg-slate-800/80 text-slate-200' : 'hover:bg-slate-100 text-slate-800'
+                  }`}
+                >
+                  <FileText className="w-5 h-5 text-emerald-400 shrink-0" />
+                  <div>
+                    <div>{language === 'tr' ? 'Gizlilik & KVKK' : 'Privacy & KVKK'}</div>
+                    <div className="text-[11px] opacity-70">{language === 'tr' ? 'Veri güvenliği ve aydınlatma metni' : 'Data protection & user rights'}</div>
                   </div>
                 </button>
               </div>
@@ -412,7 +473,7 @@ export function App() {
             {/* Menü Altı Bilgi & Sürüm */}
             <div className="pt-6 border-t border-slate-700/40 text-center">
               <p className="text-xs text-slate-400">
-                {language === 'tr' ? 'Smart Hybrid Card v2.4 • Güvenli Ekosistem' : 'Smart Hybrid Card v2.4 • Secure Ecosystem'}
+                {language === 'tr' ? 'Smart Hybrid Card v2.5 • Güvenli Ekosistem' : 'Smart Hybrid Card v2.5 • Secure Ecosystem'}
               </p>
             </div>
 
@@ -420,16 +481,16 @@ export function App() {
         </div>
       )}
 
-      {/* Sol Alt Köşe Profil Kartı (Kullanıcı Giriş Yaptığında Otomatik Görünür) */}
+      {/* Sol Alt Köşe Profil Kartı (Kullanıcı Giriş Yaptığında Otomatik Görünür - Tıklayınca Profil/Hesap Modalı Açılır) */}
       {user && (
         <div 
-          onClick={() => handleNavigate('dashboard')}
+          onClick={() => setIsAccountModalOpen(true)}
           className={`fixed bottom-5 left-5 z-40 flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border cursor-pointer transition-all duration-300 shadow-xl backdrop-blur-lg hover:scale-105 ${
             isDark 
               ? 'bg-slate-900/90 border-slate-700/80 text-white hover:border-[#14798D]' 
               : 'bg-white/95 border-slate-300 text-slate-900 hover:border-[#14798D]'
           }`}
-          title={language === 'tr' ? 'Kullanıcı Profili ve Bilgileri (Düzenlemek İçin Tıklayın)' : 'User Profile & Settings (Click to manage)'}
+          title={language === 'tr' ? 'Hesap ve Profil Ayarları (Şifre, E-posta, Profil Bilgileri)' : 'Account & Profile Settings (Password, Email, Info)'}
         >
           {/* Profil Avatarı */}
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-[#14798D] to-[#509BEC] flex items-center justify-center text-white font-bold shadow">
@@ -444,7 +505,7 @@ export function App() {
             <div className="text-xs font-bold leading-tight max-w-[140px] truncate">{userName}</div>
             <div className="text-[10px] text-[#14798D] dark:text-[#509BEC] font-medium flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block"></span>
-              {language === 'tr' ? 'Kullanıcı Profili' : 'User Profile'}
+              {language === 'tr' ? 'Hesap & Profil' : 'Account & Profile'}
             </div>
           </div>
         </div>
@@ -470,7 +531,9 @@ export function App() {
             lang={language}
             theme={theme}
             isPublicScan={isPublicScan}
+            isOwner={!!user}
             onOpenAuth={() => setIsAuthModalOpen(true)}
+            onUpdateMedical={handleUpdateMedical}
           />
         )}
 
@@ -481,17 +544,22 @@ export function App() {
             lang={language}
             theme={theme}
             isPublicScan={isPublicScan}
+            isOwner={!!user}
             onOpenAuth={() => setIsAuthModalOpen(true)}
+            onUpdatePersonal={handleUpdatePersonal}
           />
         )}
 
         {activeTab === 'vehicle' && (
           <VehicleCardView 
+            vehicle={(user || isPublicScan) ? (card.vehicle || DEMO_CARD_DATA.vehicle) : DEMO_CARD_DATA.vehicle}
             cardId={(user || isPublicScan) ? card.cardId : DEMO_CARD_DATA.cardId} 
             lang={language}
             theme={theme}
             isPublicScan={isPublicScan}
+            isOwner={!!user}
             onOpenAuth={() => setIsAuthModalOpen(true)}
+            onUpdateVehicle={handleUpdateVehicle}
           />
         )}
 
@@ -530,8 +598,34 @@ export function App() {
         onSuccess={() => {
           setIsAuthModalOpen(false);
           setIsPublicScan(false);
-          setActiveTab('dashboard');
+          setActiveTab('home');
         }}
+        lang={language}
+        theme={theme}
+      />
+
+      {/* Account / Profile Settings Modal (Triggered by Bottom-Left Badge) */}
+      <AccountProfileModal
+        isOpen={isAccountModalOpen}
+        onClose={() => setIsAccountModalOpen(false)}
+        user={user}
+        onLogout={handleLogout}
+        lang={language}
+        theme={theme}
+      />
+
+      {/* Help & Support FAQ Modal */}
+      <HelpSupportModal
+        isOpen={isHelpModalOpen}
+        onClose={() => setIsHelpModalOpen(false)}
+        lang={language}
+        theme={theme}
+      />
+
+      {/* Privacy Policy & KVKK Modal */}
+      <PrivacyPolicyModal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
         lang={language}
         theme={theme}
       />
@@ -540,6 +634,3 @@ export function App() {
 }
 
 export default App;
-
-
-

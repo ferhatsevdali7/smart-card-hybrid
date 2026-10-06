@@ -50,6 +50,15 @@ export const DEMO_CARD_DATA: SmartCard = {
     ],
     customNotes: 'Kart sahibi iletişim notları burada güvenli şekilde paylaşılır.'
   },
+  vehicle: {
+    plateNumber: '34 ABC 789',
+    brandModel: 'Hibrit Akıllı Araç',
+    ownerName: 'Örnek Kart Sahibi',
+    ownerPhone: '+90 5XX XXX XX XX',
+    emergencyContact: '+90 5XX XXX XX XX',
+    parkingNote: 'Aracım hatalı park durumundaysa veya acil bir durum varsa lütfen hemen aşağıdaki butondan beni arayın.',
+    insuranceStatus: 'Aktif Kasko & Trafik Sigortası'
+  },
   createdAt: '2026-10-06',
   updatedAt: '2026-10-06'
 };

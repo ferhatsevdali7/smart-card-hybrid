@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { 
   Heart, AlertTriangle, Phone, ShieldCheck, Pill, 
-  Activity, CheckCircle2, User, Copy, Check, Info, FileText, ArrowRight 
+  Activity, CheckCircle2, User, Copy, Check, Info, FileText, ArrowRight, Edit3, X, Plus, Trash2, Save 
 } from 'lucide-react';
-import { MedicalInfo } from '../types/card';
+import { MedicalInfo, BloodType, EmergencyContact } from '../types/card';
 import { generateNdefTextPayload } from '../lib/nfc';
 import { Language, ThemeMode, translations } from '../lib/i18n';
 
@@ -14,6 +14,8 @@ interface MedicalSOSViewProps {
   theme?: ThemeMode;
   isPublicScan?: boolean;
   onOpenAuth?: () => void;
+  onUpdateMedical?: (updated: MedicalInfo) => void;
+  isOwner?: boolean;
 }
 
 export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({ 
@@ -22,9 +24,21 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
   lang = 'tr', 
   theme = 'dark',
   isPublicScan = false,
-  onOpenAuth 
+  onOpenAuth,
+  onUpdateMedical,
+  isOwner = false
 }) => {
   const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<MedicalInfo>(medical);
+  const [newDisease, setNewDisease] = useState('');
+  const [newAllergy, setNewAllergy] = useState('');
+  const [newMedName, setNewMedName] = useState('');
+  const [newMedDosage, setNewMedDosage] = useState('');
+  const [newContactName, setNewContactName] = useState('');
+  const [newContactRelation, setNewContactRelation] = useState('');
+  const [newContactPhone, setNewContactPhone] = useState('');
+
   const t = translations[lang].sos;
   const isDark = theme === 'dark';
 
@@ -35,7 +49,16 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdateMedical) {
+      onUpdateMedical(editForm);
+    }
+    setIsEditing(false);
+  };
+
   const age = new Date().getFullYear() - medical.birthYear;
+
 
   return (
     <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} pb-20 selection:bg-[#509BEC] selection:text-white transition-colors`}>
@@ -62,6 +85,23 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
       </div>
 
       <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
+        {/* Owner Quick Edit Action Bar */}
+        {isOwner && onUpdateMedical && (
+          <div className="flex items-center justify-between bg-[#14798D]/15 border border-[#14798D]/30 p-3 rounded-2xl">
+            <div className="flex items-center gap-2 text-xs font-bold text-[#14798D] dark:text-[#509BEC]">
+              <ShieldCheck className="w-4 h-4" />
+              <span>{lang === 'tr' ? 'Sağlık Kartı Yönetimi' : 'Health Card Management'}</span>
+            </div>
+            <button
+              onClick={() => { setEditForm(medical); setIsEditing(true); }}
+              className="bg-[#14798D] hover:bg-[#0E6476] text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-98 transition-all"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{lang === 'tr' ? 'Bilgileri Düzenle' : 'Edit Info'}</span>
+            </button>
+          </div>
+        )}
+
         {/* Profile Card & Blood Type Spotlight */}
         <div className={`bg-gradient-to-br ${isDark ? 'from-[#14798D]/25 via-slate-900 to-slate-950 border-[#14798D]/40' : 'from-[#14798D]/10 via-white to-slate-50 border-[#14798D]/30'} border rounded-3xl p-5 shadow-xl relative overflow-hidden backdrop-blur-md`}>
           <div className="absolute top-0 right-0 w-36 h-36 bg-[#509BEC]/10 rounded-full blur-2xl pointer-events-none"></div>
@@ -258,6 +298,253 @@ export const MedicalSOSView: React.FC<MedicalSOSViewProps> = ({
           </div>
         )}
       </main>
+
+      {/* In-Page Medical Edit Modal */}
+      {isEditing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div onClick={() => setIsEditing(false)} className="fixed inset-0 bg-black/65 backdrop-blur-sm" />
+          <div className={`relative w-full max-w-xl ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-3xl p-6 shadow-2xl z-10 space-y-4 max-h-[90vh] overflow-y-auto`}>
+            
+            <div className="flex items-center justify-between pb-3 border-b border-slate-700/40">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-[#14798D]" />
+                <h3 className="font-bold text-base">{lang === 'tr' ? 'Sağlık Kartı Bilgilerini Düzenle' : 'Edit Health Card Info'}</h3>
+              </div>
+              <button onClick={() => setIsEditing(false)} className="p-1.5 rounded-lg border border-slate-700 hover:bg-slate-800">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
+              {/* Name, Birth Year, Blood Group */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Ad Soyad' : 'Full Name'}</label>
+                  <input
+                    type="text"
+                    value={editForm.fullName}
+                    onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Doğum Yılı' : 'Birth Year'}</label>
+                  <input
+                    type="number"
+                    value={editForm.birthYear}
+                    onChange={(e) => setEditForm({ ...editForm, birthYear: parseInt(e.target.value) || 1990 })}
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Kan Grubu' : 'Blood Group'}</label>
+                  <select
+                    value={editForm.bloodType}
+                    onChange={(e) => setEditForm({ ...editForm, bloodType: e.target.value as BloodType })}
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  >
+                    {['0 Rh+', '0 Rh-', 'A Rh+', 'A Rh-', 'B Rh+', 'B Rh-', 'AB Rh+', 'AB Rh-'].map((bg) => (
+                      <option key={bg} value={bg}>{bg}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Allergies Multi-add */}
+              <div className="space-y-2 pt-2 border-t border-slate-800/60">
+                <label className="font-bold text-amber-400 uppercase tracking-wider">{lang === 'tr' ? 'Kritik Alerjiler' : 'Allergies'}</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newAllergy}
+                    onChange={(e) => setNewAllergy(e.target.value)}
+                    placeholder={lang === 'tr' ? 'Örn: Penisilin' : 'e.g. Penicillin'}
+                    className={`flex-1 p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newAllergy.trim()) {
+                        setEditForm({ ...editForm, allergies: [...editForm.allergies, newAllergy.trim()] });
+                        setNewAllergy('');
+                      }
+                    }}
+                    className="bg-[#14798D] text-white px-3 rounded-xl font-bold"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {editForm.allergies.map((allg, idx) => (
+                    <span key={idx} className="bg-amber-500/20 text-amber-300 border border-amber-500/30 px-2 py-0.5 rounded-lg flex items-center gap-1.5 font-semibold">
+                      {allg}
+                      <Trash2 
+                        className="w-3 h-3 text-rose-400 cursor-pointer hover:scale-110" 
+                        onClick={() => setEditForm({ ...editForm, allergies: editForm.allergies.filter((_, i) => i !== idx) })}
+                      />
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Diseases Multi-add */}
+              <div className="space-y-2 pt-2 border-t border-slate-800/60">
+                <label className="font-bold text-[#509BEC] uppercase tracking-wider">{lang === 'tr' ? 'Kronik Hastalıklar' : 'Chronic Diseases'}</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newDisease}
+                    onChange={(e) => setNewDisease(e.target.value)}
+                    placeholder={lang === 'tr' ? 'Örn: Tip 1 Diyabet' : 'e.g. Type 1 Diabetes'}
+                    className={`flex-1 p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newDisease.trim()) {
+                        setEditForm({ ...editForm, chronicDiseases: [...editForm.chronicDiseases, newDisease.trim()] });
+                        setNewDisease('');
+                      }
+                    }}
+                    className="bg-[#14798D] text-white px-3 rounded-xl font-bold"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {editForm.chronicDiseases.map((dis, idx) => (
+                    <span key={idx} className="bg-slate-800 text-slate-200 border border-slate-700 px-2 py-0.5 rounded-lg flex items-center gap-1.5 font-medium">
+                      {dis}
+                      <Trash2 
+                        className="w-3 h-3 text-rose-400 cursor-pointer hover:scale-110" 
+                        onClick={() => setEditForm({ ...editForm, chronicDiseases: editForm.chronicDiseases.filter((_, i) => i !== idx) })}
+                      />
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              {/* Emergency Contacts */}
+              <div className="space-y-2 pt-2 border-t border-slate-800/60">
+                <label className="font-bold text-rose-400 uppercase tracking-wider">{lang === 'tr' ? 'Acil Durum Yakınları (ICE)' : 'ICE Emergency Contacts'}</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={newContactName}
+                    onChange={(e) => setNewContactName(e.target.value)}
+                    placeholder={lang === 'tr' ? 'İsim Soyisim' : 'Name'}
+                    className={`p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  />
+                  <input
+                    type="text"
+                    value={newContactRelation}
+                    onChange={(e) => setNewContactRelation(e.target.value)}
+                    placeholder={lang === 'tr' ? 'Yakınlık (Eş, Anne vb.)' : 'Relation'}
+                    className={`p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  />
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newContactPhone}
+                      onChange={(e) => setNewContactPhone(e.target.value)}
+                      placeholder="+90 5XX..."
+                      className={`flex-1 p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newContactName.trim() && newContactPhone.trim()) {
+                          const contact: EmergencyContact = {
+                            id: Date.now().toString(),
+                            name: newContactName.trim(),
+                            relation: newContactRelation.trim() || 'Yakını',
+                            phone: newContactPhone.trim()
+                          };
+                          setEditForm({ ...editForm, emergencyContacts: [...editForm.emergencyContacts, contact] });
+                          setNewContactName('');
+                          setNewContactRelation('');
+                          setNewContactPhone('');
+                        }
+                      }}
+                      className="bg-rose-600 text-white px-3 rounded-xl font-bold"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {editForm.emergencyContacts.map((cnt, idx) => (
+                    <div key={cnt.id || idx} className="flex items-center justify-between p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs">
+                      <div>
+                        <strong>{cnt.name}</strong> ({cnt.relation}): <span className="font-mono">{cnt.phone}</span>
+                      </div>
+                      <Trash2 
+                        className="w-3.5 h-3.5 text-rose-400 cursor-pointer hover:scale-110" 
+                        onClick={() => setEditForm({ ...editForm, emergencyContacts: editForm.emergencyContacts.filter((_, i) => i !== idx) })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Doctor Note */}
+              <div className="space-y-1 pt-2 border-t border-slate-800/60">
+                <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Doktor & İlk Yardım Notu' : 'Doctor Note'}</label>
+                <textarea
+                  value={editForm.doctorNote || ''}
+                  onChange={(e) => setEditForm({ ...editForm, doctorNote: e.target.value })}
+                  rows={2}
+                  className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                />
+              </div>
+
+              {/* Toggles */}
+              <div className="flex items-center gap-6 pt-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editForm.organDonor}
+                    onChange={(e) => setEditForm({ ...editForm, organDonor: e.target.checked })}
+                    className="rounded accent-[#14798D]"
+                  />
+                  <span>{lang === 'tr' ? 'Organ Bağışçısıyım' : 'Organ Donor'}</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editForm.hasImplant}
+                    onChange={(e) => setEditForm({ ...editForm, hasImplant: e.target.checked })}
+                    className="rounded accent-[#14798D]"
+                  />
+                  <span>{lang === 'tr' ? 'Kalp Pili / Protez Var' : 'Has Implant / Pacemaker'}</span>
+                </label>
+              </div>
+
+              {/* Save / Cancel Buttons */}
+              <div className="flex gap-2 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className={`flex-1 py-3 rounded-xl border font-bold ${isDark ? 'border-slate-700 text-slate-300' : 'border-slate-300 text-slate-700'}`}
+                >
+                  {lang === 'tr' ? 'İptal' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#14798D] to-[#509BEC] text-white font-bold flex items-center justify-center gap-2 shadow-lg"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{lang === 'tr' ? 'Kaydet & Canlıya Al' : 'Save & Publish'}</span>
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 };

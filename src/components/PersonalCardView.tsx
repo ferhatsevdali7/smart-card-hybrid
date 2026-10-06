@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { 
   CreditCard, Copy, Check, Clock, ShieldCheck, 
   Download, MessageSquare, Phone, Mail, 
-  ExternalLink, Lock, RotateCcw, AlertCircle, Building2, Sparkles 
+  ExternalLink, Lock, RotateCcw, AlertCircle, Building2, Sparkles, Edit3, X, Plus, Trash2, Save 
 } from 'lucide-react';
-import { PersonalInfo } from '../types/card';
+import { PersonalInfo, BankAccount, SocialLink } from '../types/card';
 import { downloadVCardFile } from '../lib/vcard';
 import { Language, ThemeMode, translations } from '../lib/i18n';
 
@@ -15,6 +15,8 @@ interface PersonalCardViewProps {
   theme?: ThemeMode;
   isPublicScan?: boolean;
   onOpenAuth?: () => void;
+  onUpdatePersonal?: (updated: PersonalInfo) => void;
+  isOwner?: boolean;
 }
 
 const SESSION_DURATION = 60;
@@ -25,15 +27,32 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
   lang = 'tr', 
   theme = 'dark',
   isPublicScan = false,
-  onOpenAuth 
+  onOpenAuth,
+  onUpdatePersonal,
+  isOwner = false
 }) => {
   const [timeLeft, setTimeLeft] = useState<number>(SESSION_DURATION);
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [copiedIbanId, setCopiedIbanId] = useState<string | null>(null);
   const [clipboardTimer, setClipboardTimer] = useState<number | null>(null);
+  const [isEditing, setIsEditing] = useState<boolean>(false);
+  const [editForm, setEditForm] = useState<PersonalInfo>(personal);
+  const [newBankName, setNewBankName] = useState('');
+  const [newIban, setNewIban] = useState('');
+  const [newSocialTitle, setNewSocialTitle] = useState('');
+  const [newSocialUrl, setNewSocialUrl] = useState('');
 
   const t = translations[lang].personal;
   const isDark = theme === 'dark';
+
+  const handleSaveEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdatePersonal) {
+      onUpdatePersonal(editForm);
+    }
+    setIsEditing(false);
+  };
+
 
   useEffect(() => {
     if (timeLeft <= 0) {
@@ -154,6 +173,23 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
 
       {/* Main Content */}
       <main className="max-w-md mx-auto px-4 pt-4 space-y-4">
+        {/* Owner Quick Edit Action Bar */}
+        {isOwner && onUpdatePersonal && (
+          <div className="flex items-center justify-between bg-[#509BEC]/15 border border-[#509BEC]/30 p-3 rounded-2xl">
+            <div className="flex items-center gap-2 text-xs font-bold text-[#509BEC]">
+              <ShieldCheck className="w-4 h-4" />
+              <span>{lang === 'tr' ? 'Sosyal Kart Yönetimi' : 'Social Card Management'}</span>
+            </div>
+            <button
+              onClick={() => { setEditForm(personal); setIsEditing(true); }}
+              className="bg-[#509BEC] hover:bg-[#4085d4] text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-98 transition-all"
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{lang === 'tr' ? 'Kartı Düzenle' : 'Edit Card'}</span>
+            </button>
+          </div>
+        )}
+
         {/* Profile Card Header */}
         <div className={`bg-gradient-to-br ${isDark ? 'from-slate-900 via-slate-900 to-[#14798D]/15 border-slate-800' : 'from-white via-white to-[#14798D]/10 border-slate-200 shadow-md'} border rounded-3xl p-5 shadow-xl relative overflow-hidden`}>
           <div className="flex items-start justify-between">
@@ -355,6 +391,235 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
           </div>
         )}
       </main>
+
+      {/* In-Page Social Card Edit Modal */}
+      {isEditing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div onClick={() => setIsEditing(false)} className="fixed inset-0 bg-black/65 backdrop-blur-sm" />
+          <div className={`relative w-full max-w-xl ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-3xl p-6 shadow-2xl z-10 space-y-4 max-h-[90vh] overflow-y-auto`}>
+            
+            <div className="flex items-center justify-between pb-3 border-b border-slate-700/40">
+              <div className="flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-[#509BEC]" />
+                <h3 className="font-bold text-base">{lang === 'tr' ? 'Sosyal Kart Bilgilerini Düzenle' : 'Edit Social Card Info'}</h3>
+              </div>
+              <button onClick={() => setIsEditing(false)} className="p-1.5 rounded-lg border border-slate-700 hover:bg-slate-800">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
+              {/* Profile Details */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Ad Soyad' : 'Full Name'}</label>
+                  <input
+                    type="text"
+                    value={editForm.fullName}
+                    onChange={(e) => setEditForm({ ...editForm, fullName: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Unvan / Pozisyon' : 'Title / Role'}</label>
+                  <input
+                    type="text"
+                    value={editForm.title || ''}
+                    onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Şirket / Marka' : 'Company'}</label>
+                  <input
+                    type="text"
+                    value={editForm.company || ''}
+                    onChange={(e) => setEditForm({ ...editForm, company: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Telefon' : 'Phone'}</label>
+                  <input
+                    type="text"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'E-posta' : 'Email'}</label>
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Bio & City */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="space-y-1 sm:col-span-2">
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Biyografi' : 'Bio'}</label>
+                  <input
+                    type="text"
+                    value={editForm.bio || ''}
+                    onChange={(e) => setEditForm({ ...editForm, bio: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Şehir' : 'City'}</label>
+                  <input
+                    type="text"
+                    value={editForm.city || ''}
+                    onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  />
+                </div>
+              </div>
+
+              {/* Bank Accounts (IBANs) */}
+              <div className="space-y-2 pt-2 border-t border-slate-800/60">
+                <label className="font-bold text-emerald-400 uppercase tracking-wider">{lang === 'tr' ? 'Banka Hesapları & IBAN' : 'Bank Accounts & IBAN'}</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={newBankName}
+                    onChange={(e) => setNewBankName(e.target.value)}
+                    placeholder={lang === 'tr' ? 'Banka Adı (Örn: Garanti)' : 'Bank Name'}
+                    className={`p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  />
+                  <div className="sm:col-span-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={newIban}
+                      onChange={(e) => setNewIban(e.target.value)}
+                      placeholder="TR00 0000 0000..."
+                      className={`flex-1 p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none font-mono`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newBankName.trim() && newIban.trim()) {
+                          const bank: BankAccount = {
+                            id: Date.now().toString(),
+                            bankName: newBankName.trim(),
+                            accountHolder: editForm.fullName,
+                            iban: newIban.trim(),
+                            currency: 'TRY'
+                          };
+                          setEditForm({ ...editForm, bankAccounts: [...editForm.bankAccounts, bank] });
+                          setNewBankName('');
+                          setNewIban('');
+                        }
+                      }}
+                      className="bg-emerald-600 text-white px-3 rounded-xl font-bold"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {editForm.bankAccounts.map((b, idx) => (
+                    <div key={b.id || idx} className="flex items-center justify-between p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs">
+                      <div>
+                        <strong>{b.bankName}</strong>: <span className="font-mono">{b.iban}</span>
+                      </div>
+                      <Trash2 
+                        className="w-3.5 h-3.5 text-rose-400 cursor-pointer hover:scale-110" 
+                        onClick={() => setEditForm({ ...editForm, bankAccounts: editForm.bankAccounts.filter((_, i) => i !== idx) })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Social Links */}
+              <div className="space-y-2 pt-2 border-t border-slate-800/60">
+                <label className="font-bold text-[#509BEC] uppercase tracking-wider">{lang === 'tr' ? 'Sosyal Medya & Linkler' : 'Social Links'}</label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    type="text"
+                    value={newSocialTitle}
+                    onChange={(e) => setNewSocialTitle(e.target.value)}
+                    placeholder={lang === 'tr' ? 'Başlık (Örn: LinkedIn)' : 'Title'}
+                    className={`p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                  />
+                  <div className="sm:col-span-2 flex gap-2">
+                    <input
+                      type="text"
+                      value={newSocialUrl}
+                      onChange={(e) => setNewSocialUrl(e.target.value)}
+                      placeholder="https://..."
+                      className={`flex-1 p-2 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newSocialTitle.trim() && newSocialUrl.trim()) {
+                          const link: SocialLink = {
+                            id: Date.now().toString(),
+                            platform: 'website',
+                            title: newSocialTitle.trim(),
+                            url: newSocialUrl.trim()
+                          };
+                          setEditForm({ ...editForm, socialLinks: [...editForm.socialLinks, link] });
+                          setNewSocialTitle('');
+                          setNewSocialUrl('');
+                        }
+                      }}
+                      className="bg-[#509BEC] text-white px-3 rounded-xl font-bold"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  {editForm.socialLinks.map((s, idx) => (
+                    <div key={s.id || idx} className="flex items-center justify-between p-2 rounded-xl bg-slate-800/60 border border-slate-700/60 text-xs">
+                      <div>
+                        <strong>{s.title}</strong>: <span className="opacity-70 truncate max-w-[200px] inline-block">{s.url}</span>
+                      </div>
+                      <Trash2 
+                        className="w-3.5 h-3.5 text-rose-400 cursor-pointer hover:scale-110" 
+                        onClick={() => setEditForm({ ...editForm, socialLinks: editForm.socialLinks.filter((_, i) => i !== idx) })}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Save / Cancel Buttons */}
+              <div className="flex gap-2 pt-4 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className={`flex-1 py-3 rounded-xl border font-bold ${isDark ? 'border-slate-700 text-slate-300' : 'border-slate-300 text-slate-700'}`}
+                >
+                  {lang === 'tr' ? 'İptal' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-[#14798D] to-[#509BEC] text-white font-bold flex items-center justify-center gap-2 shadow-lg"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{lang === 'tr' ? 'Kaydet & Canlıya Al' : 'Save & Publish'}</span>
+                </button>
+              </div>
+
+            </form>
+
+          </div>
+        </div>
+      )}
     </div>
   );
 };
