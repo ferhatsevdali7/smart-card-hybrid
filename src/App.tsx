@@ -372,6 +372,7 @@ export function App() {
             card={card} 
             lang={language}
             theme={theme}
+            user={user}
           />
         )}
 

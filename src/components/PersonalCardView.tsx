@@ -58,12 +58,20 @@ export const PersonalCardView: React.FC<PersonalCardViewProps> = ({
   useEffect(() => {
     if (clipboardTimer === null) return;
     if (clipboardTimer <= 0) {
+      // Physically wipe clipboard content on timer expiration for maximum security
+      navigator.clipboard.writeText('').catch(() => {});
       setClipboardTimer(null);
       return;
     }
 
     const interval = setInterval(() => {
-      setClipboardTimer(prev => (prev && prev > 1 ? prev - 1 : null));
+      setClipboardTimer(prev => {
+        if (prev && prev <= 1) {
+          navigator.clipboard.writeText('').catch(() => {});
+          return null;
+        }
+        return prev ? prev - 1 : null;
+      });
     }, 1000);
 
     return () => clearInterval(interval);

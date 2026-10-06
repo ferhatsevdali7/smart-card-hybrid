@@ -94,3 +94,36 @@ export function listenToCardUpdates(cardId: string, onUpdate: (card: SmartCard) 
   }
 }
 
+/**
+ * Saves zero-knowledge encrypted vault payload to user's secure vault in Firestore
+ */
+export async function saveVaultToFirestore(payload: any, userId: string): Promise<void> {
+  try {
+    const vaultRef = doc(db, 'vaults', userId);
+    await setDoc(vaultRef, {
+      ...payload,
+      updatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    console.warn('Vault save error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Fetches user's encrypted vault payload from Firestore
+ */
+export async function fetchVaultFromFirestore(userId: string): Promise<any | null> {
+  try {
+    const vaultRef = doc(db, 'vaults', userId);
+    const snap = await getDoc(vaultRef);
+    if (snap.exists()) {
+      return snap.data();
+    }
+  } catch (error) {
+    console.warn('Vault fetch error:', error);
+  }
+  return null;
+}
+
+

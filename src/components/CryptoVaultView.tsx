@@ -1,19 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { 
   ShieldCheck, Lock, Unlock, Key, FileCode, CheckCircle2, 
-  AlertCircle, RefreshCw, Copy, Check, Eye, EyeOff 
+  AlertCircle, RefreshCw, Copy, Check, Eye, EyeOff, Cloud, UploadCloud 
 } from 'lucide-react';
 import { SmartCard } from '../types/card';
 import { encryptData, decryptData, EncryptedPayload } from '../lib/crypto';
+import { saveVaultToFirestore, fetchVaultFromFirestore } from '../lib/firestoreService';
+import { User } from 'firebase/auth';
 import { Language, ThemeMode, translations } from '../lib/i18n';
 
 interface CryptoVaultViewProps {
   card: SmartCard;
   lang?: Language;
   theme?: ThemeMode;
+  user?: User | null;
 }
 
-export const CryptoVaultView: React.FC<CryptoVaultViewProps> = ({ card, lang = 'tr', theme = 'dark' }) => {
+export const CryptoVaultView: React.FC<CryptoVaultViewProps> = ({ 
+  card, 
+  lang = 'tr', 
+  theme = 'dark',
+  user 
+}) => {
   const [pin, setPin] = useState('1234');
   const [showPin, setShowPin] = useState(false);
   const [isEncrypting, setIsEncrypting] = useState(false);
@@ -22,6 +30,8 @@ export const CryptoVaultView: React.FC<CryptoVaultViewProps> = ({ card, lang = '
   const [decryptPinInput, setDecryptPinInput] = useState('');
   const [decryptError, setDecryptError] = useState<string | null>(null);
   const [copiedPayload, setCopiedPayload] = useState(false);
+  const [cloudSaving, setCloudSaving] = useState(false);
+  const [cloudSavedMsg, setCloudSavedMsg] = useState<string | null>(null);
 
   const t = translations[lang].vault;
   const isDark = theme === 'dark';
@@ -81,8 +91,49 @@ export const CryptoVaultView: React.FC<CryptoVaultViewProps> = ({ card, lang = '
     setTimeout(() => setCopiedPayload(false), 2000);
   };
 
+  const handleSaveToCloud = async () => {
+    if (!encryptedPayload || !user) return;
+    setCloudSaving(true);
+    try {
+      await saveVaultToFirestore(encryptedPayload, user.uid);
+      setCloudSavedMsg(lang === 'tr' ? 'Şifreli kasa buluta başarıyla yedeklendi!' : 'Encrypted vault backed up to cloud!');
+      setTimeout(() => setCloudSavedMsg(null), 3000);
+    } catch (e: any) {
+      alert(lang === 'tr' ? 'Yedekleme başarısız oldu.' : 'Backup failed.');
+    } finally {
+      setCloudSaving(false);
+    }
+  };
+
+  const handleLoadFromCloud = async () => {
+    if (!user) return;
+    setCloudSaving(true);
+    try {
+      const remoteVault = await fetchVaultFromFirestore(user.uid);
+      if (remoteVault) {
+        setEncryptedPayload(remoteVault);
+        setCloudSavedMsg(lang === 'tr' ? 'Buluttaki şifreli kasa yüklendi! Çözmek için PIN girin.' : 'Cloud vault loaded! Enter PIN to decrypt.');
+        setTimeout(() => setCloudSavedMsg(null), 3500);
+      } else {
+        alert(lang === 'tr' ? 'Bulutta kayıtlı kasa bulunamadı.' : 'No cloud vault backup found.');
+      }
+    } catch (e: any) {
+      alert(lang === 'tr' ? 'Yükleme başarısız oldu.' : 'Load failed.');
+    } finally {
+      setCloudSaving(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-6 pb-20">
+      {/* Cloud Notification */}
+      {cloudSavedMsg && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 p-3.5 rounded-2xl flex items-center gap-2 text-xs font-semibold shadow-md">
+          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          <span>{cloudSavedMsg}</span>
+        </div>
+      )}
+
       {/* Header */}
       <div className={`bg-gradient-to-br ${isDark ? 'from-[#14798D]/25 via-slate-900 to-slate-950 border-[#14798D]/40' : 'from-[#14798D]/10 via-white to-slate-50 border-[#14798D]/30 shadow-md'} border p-6 rounded-3xl shadow-xl space-y-3`}>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -103,32 +154,59 @@ export const CryptoVaultView: React.FC<CryptoVaultViewProps> = ({ card, lang = '
             </div>
           </div>
 
-          <div className={`flex items-center gap-2 w-full sm:w-auto ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'} p-1.5 rounded-2xl border`}>
-            <div className="relative flex-1 sm:w-32">
-              <input
-                type={showPin ? 'text' : 'password'}
-                value={pin}
-                onChange={e => setPin(e.target.value)}
-                placeholder={t.pinPlaceholder}
-                className={`w-full bg-transparent px-3 py-1.5 text-xs ${isDark ? 'text-white' : 'text-slate-900'} font-mono tracking-widest focus:outline-none`}
-              />
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            {user && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={handleSaveToCloud}
+                  disabled={cloudSaving || !encryptedPayload}
+                  className="bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 border border-emerald-500/40 text-xs font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all disabled:opacity-50"
+                  title="Buluta Yedekle"
+                >
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">{lang === 'tr' ? 'Buluta Yedekle' : 'Backup to Cloud'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleLoadFromCloud}
+                  disabled={cloudSaving}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold py-2 px-3 rounded-xl flex items-center gap-1.5 transition-all disabled:opacity-50"
+                  title="Buluttan Yükle"
+                >
+                  <Cloud className="w-3.5 h-3.5 text-[#509BEC]" />
+                  <span className="hidden sm:inline">{lang === 'tr' ? 'Buluttan Getir' : 'Load from Cloud'}</span>
+                </button>
+              </div>
+            )}
+
+            <div className={`flex items-center gap-2 ${isDark ? 'bg-slate-950 border-slate-800' : 'bg-slate-100 border-slate-200'} p-1.5 rounded-2xl border flex-1 sm:flex-initial`}>
+              <div className="relative flex-1 sm:w-32">
+                <input
+                  type={showPin ? 'text' : 'password'}
+                  value={pin}
+                  onChange={e => setPin(e.target.value)}
+                  placeholder={t.pinPlaceholder}
+                  className={`w-full bg-transparent px-3 py-1.5 text-xs ${isDark ? 'text-white' : 'text-slate-900'} font-mono tracking-widest focus:outline-none`}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPin(!showPin)}
+                  className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                >
+                  {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5 text-[#509BEC]" />}
+                </button>
+              </div>
+
               <button
-                type="button"
-                onClick={() => setShowPin(!showPin)}
-                className="absolute right-2 top-2 text-slate-400 hover:text-slate-600"
+                onClick={handleRunEncryption}
+                disabled={isEncrypting || !pin}
+                className="bg-[#14798D] hover:bg-[#0E6476] text-white text-xs font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 transition-all shadow-md active:scale-98 disabled:opacity-50"
               >
-                {showPin ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5 text-[#509BEC]" />}
+                <RefreshCw className={`w-3.5 h-3.5 ${isEncrypting ? 'animate-spin' : ''}`} />
+                <span>{t.reEncrypt}</span>
               </button>
             </div>
-
-            <button
-              onClick={handleRunEncryption}
-              disabled={isEncrypting || !pin}
-              className="bg-[#14798D] hover:bg-[#0E6476] text-white text-xs font-bold py-1.5 px-3 rounded-xl flex items-center gap-1.5 transition-all shadow-md active:scale-98 disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isEncrypting ? 'animate-spin' : ''}`} />
-              <span>{t.reEncrypt}</span>
-            </button>
           </div>
         </div>
       </div>

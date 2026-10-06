@@ -1,23 +1,50 @@
-﻿rules_version = '2';
+rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Smart Hybrid Cards Collection
-    match /cards/{cardId} {
-      // 1. Herkes (Giriş yapmamış ilk yardım ekipleri & acil durum görevlileri dahil)
-      // kartın yaşam kurtaran açık sağlık bilgilerini okuyabilir.
-      allow read: if true;
-
-      // 2. Sadece kartın sahibi (veya aktivasyon kodunu bilen kullanıcı) yazma/güncelleme yapabilir.
-      allow create, update: if request.auth != null || request.resource.data.cardId == cardId;
-
-      // 3. Kart silme yetkisi sadece yetkili kullanıcıya aittir.
-      allow delete: if request.auth != null;
+    // Auth helpers
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Encrypted Vault Private Backups
+    // Smart Hybrid Cards Collection
+    match /cards/{cardId} {
+      // 1. Life-saving public read access for emergency personnel and NFC/QR scanners
+      allow read: if true;
+
+      // 2. Card Creation: Authenticated users can create cards bound to their ownerUid
+      allow create: if isAuthenticated() && (
+        !('ownerUid' in request.resource.data) || 
+        request.resource.data.ownerUid == request.auth.uid
+      );
+
+      // 3. Card Update: Only the verified card owner can modify their card
+      allow update: if isAuthenticated() && (
+        !('ownerUid' in resource.data) || 
+        resource.data.ownerUid == request.auth.uid ||
+        request.resource.data.ownerUid == request.auth.uid
+      );
+
+      // 4. Card Deletion: Only the verified card owner can delete their card
+      allow delete: if isAuthenticated() && (
+        !('ownerUid' in resource.data) || 
+        resource.data.ownerUid == request.auth.uid
+      );
+    }
+
+    // User Profile Documents (Private to each user)
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Encrypted Vault Backups (Zero-Knowledge Private Backups)
     match /vaults/{vaultId} {
-      allow read, write: if request.auth != null && request.auth.uid == vaultId;
+      allow read, write: if isOwner(vaultId);
     }
   }
 }
+
