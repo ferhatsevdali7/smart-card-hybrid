@@ -29,6 +29,11 @@ export const adminSetTagStatusFn = call<
   { result: 'OK'; status: string }
 >('adminSetTagStatus');
 
+export const adminOverviewFn = call<
+  { range: string; from?: string; to?: string; fresh?: boolean },
+  import('./overviewService').OverviewData
+>('adminOverview');
+
 /** Firebase hata nesnesinden kullanıcıya gösterilecek mesajı çıkarır. */
 export function functionErrorMessage(err: unknown, fallback = 'Bir hata oluştu. Lütfen tekrar deneyin.'): string {
   const e = err as { code?: string; message?: string };

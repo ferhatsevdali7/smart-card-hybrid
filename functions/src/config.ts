@@ -46,6 +46,8 @@ export const LIMITS = {
   noticePerIpTag: [3, 600],
   adminBatchPerUser: [20, 3600],
   testPushPerUser: [5, 3600],
+  /** Bir etiket bir saatte bu kadar okutulursa "şüpheli okutma" uyarısı oluşur. */
+  scanAlertPerHour: 30,
 } as const;
 
 export const MAX_BATCH_SIZE = 1000;

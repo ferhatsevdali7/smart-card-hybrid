@@ -1,327 +1,189 @@
-import React, { useState } from 'react';
-import { 
-  ShieldCheck, 
-  Layers, 
-  QrCode, 
-  Car, 
-  Users, 
-  Activity, 
-  LogOut, 
-  Sun, 
-  Moon, 
-  Globe, 
-  ChevronRight,
-  AlertTriangle,
-  UserCheck
-} from 'lucide-react';
-import { AdminSession, clearAdminSession, getAdminTheme, setAdminTheme, getAdminLang, setAdminLang } from '../lib/adminSessionService';
+import React, { useEffect, useState } from 'react';
+import { AdminSession, AdminThemePref } from '../lib/adminSessionService';
+import { AdminLang, Avatar, Icon, IconName, roleLabel, themeVars, useAdminFonts } from './admin/adminUi';
+import { ProfileMenu, SettingsTab } from './admin/ProfileMenu';
 
 interface AdminLayoutProps {
   session: AdminSession;
   activeSection: string;
   onSelectSection: (section: string) => void;
+  onOpenSettings: (tab: SettingsTab) => void;
   onLogout: () => void;
+  lang: AdminLang;
+  onLang: (l: AdminLang) => void;
+  themePref: AdminThemePref;
+  onTheme: (t: AdminThemePref) => void;
+  isDark: boolean;
+  displayName: string;
+  photo: string | null;
+  sessionCount: number;
+  expiresAt: number;
+  /** Profil ve Ayarlar gibi kendi menüsü olan sayfalarda kenar menü gizlenir */
+  hideSidebar?: boolean;
   children: React.ReactNode;
 }
 
-export const AdminLayout: React.FC<AdminLayoutProps> = ({
-  session,
-  activeSection,
-  onSelectSection,
-  onLogout,
-  children
-}) => {
-  const [theme, setThemeState] = useState<'dark' | 'light'>(getAdminTheme());
-  const [lang, setLangState] = useState<'tr' | 'en'>(getAdminLang());
+const NAV: { group: 'ops' | 'sec'; id: string; icon: IconName; tr: string; en: string }[] = [
+  { group: 'ops', id: 'overview', icon: 'grid', tr: 'Genel Bakış', en: 'Overview' },
+  { group: 'ops', id: 'batches', icon: 'layers', tr: 'Üretim Partileri', en: 'Production Batches' },
+  { group: 'ops', id: 'qr_bank', icon: 'qr', tr: 'QR Bankası', en: 'QR Bank' },
+  { group: 'ops', id: 'vehicles', icon: 'car', tr: 'Bağlı Araçlar', en: 'Linked Vehicles' },
+  { group: 'ops', id: 'users', icon: 'users', tr: 'Kullanıcılar', en: 'Users' },
+  { group: 'sec', id: 'audit', icon: 'shield', tr: 'Denetim Kayıtları', en: 'Audit Logs' },
+];
+
+export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
+  useAdminFonts();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const L = (tr: string, en: string) => (p.lang === 'tr' ? tr : en);
+  const role = roleLabel(p.session.role, p.lang);
 
-  const toggleTheme = () => {
-    const nextTheme = theme === 'dark' ? 'light' : 'dark';
-    setThemeState(nextTheme);
-    setAdminTheme(nextTheme);
+  useEffect(() => { setNavOpen(false); }, [p.activeSection]);
+
+  const current = NAV.find((n) => n.id === p.activeSection);
+  const crumb = p.activeSection.startsWith('settings') ? L('Profil ve Ayarlar', 'Profile & Settings') : current ? L(current.tr, current.en) : '';
+
+  const navLink = (n: (typeof NAV)[number]) => {
+    const on = p.activeSection === n.id;
+    return (
+      <button
+        key={n.id}
+        type="button"
+        aria-current={on ? 'page' : undefined}
+        onClick={() => p.onSelectSection(n.id)}
+        className="w-full flex items-center gap-2.5 h-10 md:h-[38px] px-2.5 rounded-lg text-left text-[13.5px] transition-colors hover:bg-[var(--a-hover)]"
+        style={{ background: on ? 'var(--a-active)' : undefined, color: on ? 'var(--a-text)' : 'var(--a-text2)', fontWeight: on ? 600 : 400 }}
+      >
+        <span style={{ color: on ? 'var(--a-accent)' : 'currentColor' }}><Icon name={n.icon} size={18} /></span>
+        {L(n.tr, n.en)}
+      </button>
+    );
   };
 
-  const toggleLang = () => {
-    const nextLang = lang === 'tr' ? 'en' : 'tr';
-    setLangState(nextLang);
-    setAdminLang(nextLang);
-  };
+  const groupTitle = (text: string, first = false) => (
+    <div className={`px-2.5 ${first ? 'pt-1.5' : 'pt-4'} pb-2 text-[11px] font-medium uppercase tracking-[0.6px]`} style={{ color: 'var(--a-faint)' }}>{text}</div>
+  );
 
-  const t = {
-    tr: {
-      brand: 'MERKEZİ YÖNETİM SİSTEMİ',
-      portalBadge: 'Super Admin Konsolu',
-      menuOverview: 'Genel Bakış & Metrikler',
-      menuBatches: 'Seri Üretim & Partiler',
-      menuQrBank: 'Merkezi QR & Çip Envanteri',
-      menuVehicles: 'Bağlı Araçlar & Garajlar',
-      menuUsers: 'Kullanıcı & Müşteri Dizini',
-      menuAudit: 'Güvenlik & Denetim Logları',
-      adminProfile: 'Yönetici Hesabı',
-      roleSuper: 'Süper Yönetici',
-      logout: 'Oturumu Kapat',
-      logoutTitle: 'Yönetici Oturumunu Kapat',
-      logoutDesc: 'Yönetim konsolundan çıkmak istediğinize emin misiniz? Yapılan kaydedilmemiş işlemler kaybolabilir.',
-      cancel: 'Vazgeç',
-      confirmLogout: 'Evet, Çıkış Yap',
-      sysStatus: 'Sistem Durumu: Aktif',
-      dbLive: 'Firestore Canlı Bağlantı',
-    },
-    en: {
-      brand: 'CENTRAL CONTROL SYSTEM',
-      portalBadge: 'Super Admin Console',
-      menuOverview: 'Overview & Metrics',
-      menuBatches: 'Batch Production & Runs',
-      menuQrBank: 'Central QR & Chip Inventory',
-      menuVehicles: 'Linked Vehicles & Garages',
-      menuUsers: 'User & Customer Directory',
-      menuAudit: 'Security & Audit Logs',
-      adminProfile: 'Admin Account',
-      roleSuper: 'Super Administrator',
-      logout: 'Sign Out',
-      logoutTitle: 'Sign Out Administrator',
-      logoutDesc: 'Are you sure you want to end your administrative session?',
-      cancel: 'Cancel',
-      confirmLogout: 'Yes, Sign Out',
-      sysStatus: 'System Status: Active',
-      dbLive: 'Firestore Live Sync',
-    }
-  }[lang];
-
-  const isDark = theme === 'dark';
+  const sidebar = (
+    <nav aria-label={L('Yönetim menüsü', 'Admin menu')} className="flex flex-col gap-0.5 p-3 pt-4">
+      {groupTitle(L('Operasyon', 'Operations'), true)}
+      {NAV.filter((n) => n.group === 'ops').map(navLink)}
+      {groupTitle(L('Güvenlik', 'Security'))}
+      {NAV.filter((n) => n.group === 'sec').map(navLink)}
+    </nav>
+  );
 
   return (
-    <div className={`min-h-screen w-full flex flex-col font-sans selection:bg-neutral-700 selection:text-white ${
-      isDark ? 'bg-[#090b0e] text-[#e1e4e8]' : 'bg-[#f4f6f8] text-[#1f2328]'
-    }`}>
-      {/* ÜST KURUMSAL HEADER (KARTSIZ, DÜZ ÇİZGİ AYRIMLI) */}
-      <header className={`h-14 border-b flex items-center justify-between px-6 shrink-0 ${
-        isDark ? 'bg-[#0d1117] border-[#21262d]' : 'bg-white border-[#d0d7de]'
-      }`}>
-        {/* Sol Logo & Marka */}
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-black border border-white flex items-center justify-center text-white font-black text-[10px] tracking-tight shrink-0 shadow-sm">
-            H***F
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xs font-bold tracking-widest uppercase">
-              {t.brand}
-            </span>
-            <span className="text-[10px] text-neutral-400 font-mono">
-              v2.5.0 • {t.portalBadge}
-            </span>
-          </div>
+    <div className="min-h-screen w-full flex flex-col" style={{ ...themeVars(p.isDark), background: 'var(--a-bg)', color: 'var(--a-text)', colorScheme: p.isDark ? 'dark' : 'light' }}>
+      {/* ÜST ÇUBUK */}
+      <header className="h-14 shrink-0 flex items-center justify-between gap-3 pl-1 pr-3 md:px-5 sticky top-0 z-30" style={{ background: 'var(--a-panel)', borderBottom: '1px solid var(--a-line)' }}>
+        <div className="flex items-center gap-3 min-w-0">
+          {!p.hideSidebar ? (
+            <button type="button" onClick={() => setNavOpen(true)} aria-label={L('Menüyü aç', 'Open menu')} className="md:hidden w-11 h-11 flex items-center justify-center" style={{ color: 'var(--a-text2)' }}>
+              <Icon name="menu" size={20} />
+            </button>
+          ) : <span className="w-2 md:hidden" />}
+          <div className="w-[30px] h-[30px] rounded-full bg-black flex items-center justify-center text-white font-semibold shrink-0" style={{ fontSize: 7.5, letterSpacing: 0.5, border: p.isDark ? '1.5px solid #E7E9EC' : 'none' }}>H***F</div>
+          <span className="hidden sm:inline text-sm font-semibold whitespace-nowrap">{L('Yönetim Konsolu', 'Admin Console')}</span>
+          {crumb && <span className="hidden sm:block w-px h-[18px]" style={{ background: 'var(--a-line2)' }} />}
+          <span className="text-[13px] truncate" style={{ color: 'var(--a-muted)' }}>{crumb}</span>
         </div>
 
-        {/* Sağ Kontroller & Profil */}
-        <div className="flex items-center gap-4">
-          {/* Dil Seçici */}
+        <div className="relative">
           <button
-            onClick={toggleLang}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono font-medium border rounded transition-colors ${
-              isDark 
-                ? 'bg-[#161b22] border-[#30363d] text-neutral-300 hover:bg-[#21262d]' 
-                : 'bg-neutral-100 border-neutral-300 text-neutral-700 hover:bg-neutral-200'
-            }`}
-            title="Dili Değiştir / Change Language"
+            type="button"
+            data-profile-trigger
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen((v) => !v)}
+            className="flex items-center gap-2.5 p-1 sm:pr-2.5 rounded-[10px] transition-colors hover:bg-[var(--a-hover)]"
+            style={{ border: `1px solid ${menuOpen ? 'var(--a-line3)' : 'transparent'}`, background: menuOpen ? 'var(--a-hover)' : undefined, color: 'var(--a-text)' }}
           >
-            <Globe className="w-3.5 h-3.5" />
-            <span>{lang.toUpperCase()}</span>
+            <Avatar name={p.displayName} photo={p.photo} size={32} />
+            <span className="hidden sm:flex flex-col items-start leading-tight">
+              <span className="text-[13px] font-semibold max-w-[180px] truncate">{p.displayName}</span>
+              <span className="text-[11px]" style={{ color: 'var(--a-muted)' }}>{role}</span>
+            </span>
+            <span className="hidden sm:inline" style={{ color: 'var(--a-muted)', transform: menuOpen ? 'rotate(180deg)' : undefined }}><Icon name="chevronDown" size={16} /></span>
           </button>
 
-          {/* Tema Seçici */}
-          <button
-            onClick={toggleTheme}
-            className={`p-1.5 border rounded transition-colors ${
-              isDark 
-                ? 'bg-[#161b22] border-[#30363d] text-neutral-300 hover:bg-[#21262d]' 
-                : 'bg-neutral-100 border-neutral-300 text-neutral-700 hover:bg-neutral-200'
-            }`}
-            title={isDark ? 'Açık Temaya Geç' : 'Koyu Temaya Geç'}
-          >
-            {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-indigo-600" />}
-          </button>
-
-          <div className="h-4 w-px bg-neutral-700/50" />
-
-          {/* Yönetici Profil Bilgisi */}
-          <div className="flex items-center gap-3">
-            <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-bold text-xs ${
-              isDark ? 'bg-neutral-800 border-neutral-700 text-emerald-400' : 'bg-neutral-200 border-neutral-300 text-neutral-800'
-            }`}>
-              {session.email.charAt(0).toUpperCase()}
-            </div>
-            <div className="hidden sm:flex flex-col text-left">
-              <span className="text-xs font-semibold leading-tight">{session.email}</span>
-              <span className="text-[10px] text-emerald-500 font-mono flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {t.roleSuper}
-              </span>
-            </div>
-          </div>
-
-          {/* Çıkış Butonu */}
-          <button
-            onClick={() => setShowLogoutConfirm(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border rounded transition-colors ${
-              isDark 
-                ? 'bg-rose-950/30 border-rose-900/50 text-rose-300 hover:bg-rose-900/50' 
-                : 'bg-rose-50 border-rose-200 text-rose-700 hover:bg-rose-100'
-            }`}
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{t.logout}</span>
-          </button>
+          <ProfileMenu
+            open={menuOpen}
+            onClose={() => setMenuOpen(false)}
+            name={p.displayName}
+            email={p.session.email}
+            role={role}
+            photo={p.photo}
+            loginTime={p.session.loginTime}
+            expiresAt={p.expiresAt}
+            sessionCount={p.sessionCount}
+            lang={p.lang}
+            onLang={p.onLang}
+            themePref={p.themePref}
+            onTheme={p.onTheme}
+            onOpenSettings={p.onOpenSettings}
+            onLogout={() => setShowLogoutConfirm(true)}
+          />
         </div>
       </header>
 
-      {/* ANA GÖVDE (SIDEBAR + İÇERİK ALANI) */}
-      <div className="flex-1 flex overflow-hidden">
-        {/* SOL YÖNETİM MENÜSÜ (SIDEBAR) */}
-        <aside className={`w-64 border-r flex flex-col justify-between p-3 shrink-0 select-none ${
-          isDark ? 'bg-[#0d1117] border-[#21262d]' : 'bg-white border-[#d0d7de]'
-        }`}>
-          <div className="space-y-1">
-            <div className="px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-neutral-500 font-mono">
-              Envanter & Operasyon
-            </div>
-
-            <button
-              onClick={() => onSelectSection('batches')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded transition-colors text-left ${
-                activeSection === 'batches'
-                  ? isDark ? 'bg-neutral-800 text-white font-semibold' : 'bg-neutral-200 text-neutral-900 font-semibold'
-                  : isDark ? 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200' : 'text-neutral-600 hover:bg-neutral-100'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Layers className="w-4 h-4 text-emerald-400" />
-                <span>{t.menuBatches}</span>
+      <div className="flex-1 flex min-h-0">
+        {!p.hideSidebar && (
+          <>
+            <aside className="hidden md:block w-[232px] shrink-0" style={{ background: 'var(--a-panel)', borderRight: '1px solid var(--a-line)' }}>
+              {sidebar}
+            </aside>
+            {navOpen && (
+              <div className="md:hidden fixed inset-0 z-40">
+                <div className="absolute inset-0" style={{ background: 'var(--a-overlay)' }} onClick={() => setNavOpen(false)} />
+                <aside className="absolute inset-y-0 left-0 w-[264px] max-w-[85vw] overflow-y-auto" style={{ background: 'var(--a-panel)', borderRight: '1px solid var(--a-line)' }}>
+                  <div className="flex justify-end p-1.5">
+                    <button type="button" onClick={() => setNavOpen(false)} aria-label={L('Menüyü kapat', 'Close menu')} className="w-11 h-11 flex items-center justify-center" style={{ color: 'var(--a-text2)' }}>
+                      <Icon name="x" size={20} />
+                    </button>
+                  </div>
+                  {sidebar}
+                </aside>
               </div>
-              <ChevronRight className="w-3.5 h-3.5 opacity-50" />
-            </button>
+            )}
+          </>
+        )}
 
-            <button
-              onClick={() => onSelectSection('qr_bank')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded transition-colors text-left ${
-                activeSection === 'qr_bank'
-                  ? isDark ? 'bg-neutral-800 text-white font-semibold' : 'bg-neutral-200 text-neutral-900 font-semibold'
-                  : isDark ? 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200' : 'text-neutral-600 hover:bg-neutral-100'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <QrCode className="w-4 h-4 text-sky-400" />
-                <span>{t.menuQrBank}</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 opacity-50" />
-            </button>
-
-            <button
-              onClick={() => onSelectSection('vehicles')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded transition-colors text-left ${
-                activeSection === 'vehicles'
-                  ? isDark ? 'bg-neutral-800 text-white font-semibold' : 'bg-neutral-200 text-neutral-900 font-semibold'
-                  : isDark ? 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200' : 'text-neutral-600 hover:bg-neutral-100'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Car className="w-4 h-4 text-sky-400" />
-                <span>{t.menuVehicles}</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 opacity-50" />
-            </button>
-
-            <button
-              onClick={() => onSelectSection('users')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded transition-colors text-left ${
-                activeSection === 'users'
-                  ? isDark ? 'bg-neutral-800 text-white font-semibold' : 'bg-neutral-200 text-neutral-900 font-semibold'
-                  : isDark ? 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200' : 'text-neutral-600 hover:bg-neutral-100'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Users className="w-4 h-4 text-indigo-400" />
-                <span>{t.menuUsers}</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 opacity-50" />
-            </button>
-
-            <div className="pt-4 px-3 py-2 text-[10px] font-bold uppercase tracking-wider text-neutral-500 font-mono">
-              Güvenlik & Sistem
-            </div>
-
-            <button
-              onClick={() => onSelectSection('audit')}
-              className={`w-full flex items-center justify-between px-3 py-2 text-xs font-medium rounded transition-colors text-left ${
-                activeSection === 'audit'
-                  ? isDark ? 'bg-neutral-800 text-white font-semibold' : 'bg-neutral-200 text-neutral-900 font-semibold'
-                  : isDark ? 'text-neutral-400 hover:bg-neutral-800/50 hover:text-neutral-200' : 'text-neutral-600 hover:bg-neutral-100'
-              }`}
-            >
-              <div className="flex items-center gap-2.5">
-                <Activity className="w-4 h-4 text-amber-400" />
-                <span>{t.menuAudit}</span>
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 opacity-50" />
-            </button>
-          </div>
-
-          {/* Alt Bilgi */}
-          <div className={`p-3 rounded border text-[11px] font-mono ${
-            isDark ? 'bg-[#161b22] border-[#30363d] text-neutral-400' : 'bg-neutral-50 border-neutral-200 text-neutral-600'
-          }`}>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="font-semibold text-neutral-300">{t.sysStatus}</span>
-            </div>
-            <div>{t.dbLive}</div>
-          </div>
-        </aside>
-
-        {/* SAĞ İÇERİK ALANI (TABLOLAR & VERİ AKIŞI) */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-8">
-          {children}
+        <main className={`flex-1 min-w-0 overflow-y-auto ${p.hideSidebar ? '' : 'p-5 md:p-8'}`}>
+          {p.children}
         </main>
       </div>
 
-      {/* ÇIKIŞ ONAY MODALI */}
+      {/* ÇIKIŞ ONAYI */}
       {showLogoutConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className={`w-full max-w-md border p-6 shadow-2xl rounded ${
-            isDark ? 'bg-[#161b22] border-[#30363d] text-[#e1e4e8]' : 'bg-white border-neutral-300 text-neutral-900'
-          }`}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'var(--a-overlay)' }} role="dialog" aria-modal="true" aria-labelledby="logout-title">
+          <div className="w-full max-w-md p-6 rounded-[14px]" style={{ background: 'var(--a-raised)', border: '1px solid var(--a-line3)', boxShadow: 'var(--a-shadow)' }}>
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400">
-                <AlertTriangle className="w-5 h-5" />
+              <div className="w-10 h-10 rounded-[10px] flex items-center justify-center" style={{ background: 'var(--a-danger-tint)', color: 'var(--a-danger)' }}>
+                <Icon name="logout" size={19} />
               </div>
-              <div>
-                <h3 className="text-base font-bold">{t.logoutTitle}</h3>
-                <p className="text-xs text-neutral-400">{session.email}</p>
+              <div className="min-w-0">
+                <h3 id="logout-title" className="text-base font-semibold">{L('Oturumu kapat', 'Sign out')}</h3>
+                <p className="text-xs truncate" style={{ color: 'var(--a-muted)' }}>{p.session.email}</p>
               </div>
             </div>
-
-            <p className="text-xs text-neutral-400 mb-6 leading-relaxed">
-              {t.logoutDesc}
+            <p className="text-[13px] mb-6 leading-relaxed" style={{ color: 'var(--a-text2)' }}>
+              {L('Yönetim panelinden çıkmak istediğinize emin misiniz? Bu tarayıcıdaki oturum kapanacak.', 'Sign out of the admin console? The session in this browser will end.')}
             </p>
-
-            <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setShowLogoutConfirm(false)}
-                className={`px-4 py-2 text-xs font-medium border rounded transition-colors ${
-                  isDark ? 'bg-neutral-800 border-neutral-700 text-neutral-300 hover:bg-neutral-700' : 'bg-neutral-100 border-neutral-300 text-neutral-700 hover:bg-neutral-200'
-                }`}
-              >
-                {t.cancel}
+            <div className="flex justify-end gap-2.5">
+              <button type="button" onClick={() => setShowLogoutConfirm(false)} className="h-10 px-4 rounded-lg text-[13.5px] transition-colors hover:bg-[var(--a-hover)]" style={{ color: 'var(--a-text2)' }}>
+                {L('Vazgeç', 'Cancel')}
               </button>
               <button
-                onClick={() => {
-                  setShowLogoutConfirm(false);
-                  clearAdminSession();
-                  onLogout();
-                }}
-                className="px-4 py-2 text-xs font-medium bg-rose-600 hover:bg-rose-700 text-white rounded transition-colors"
+                type="button"
+                autoFocus
+                onClick={() => { setShowLogoutConfirm(false); p.onLogout(); }}
+                className="h-10 px-4 rounded-lg text-[13.5px] font-semibold text-white"
+                style={{ background: p.isDark ? '#C2412F' : '#B42318' }}
               >
-                {t.confirmLogout}
+                {L('Evet, çıkış yap', 'Yes, sign out')}
               </button>
             </div>
           </div>

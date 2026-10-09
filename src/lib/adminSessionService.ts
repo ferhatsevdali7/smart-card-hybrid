@@ -1,4 +1,4 @@
-﻿// src/lib/adminSessionService.ts
+// src/lib/adminSessionService.ts
 // Bağımsız Admin Oturum Yönetimi & F5 Yenileme Koruması (sessionStorage ile sadece aktif sekmede kalıcı)
 import { StaffRole } from '../types/card';
 
@@ -52,15 +52,19 @@ export function clearAdminSession(): void {
   }
 }
 
-export function getAdminTheme(): 'dark' | 'light' {
+/** Tema tercihi: açık, koyu veya cihazın sistem ayarı */
+export type AdminThemePref = 'dark' | 'light' | 'system';
+
+export function getAdminTheme(): AdminThemePref {
   try {
-    return (localStorage.getItem(ADMIN_THEME_KEY) as 'dark' | 'light') || 'dark';
+    const v = localStorage.getItem(ADMIN_THEME_KEY);
+    return v === 'light' || v === 'system' ? v : 'dark';
   } catch {
     return 'dark';
   }
 }
 
-export function setAdminTheme(theme: 'dark' | 'light'): void {
+export function setAdminTheme(theme: AdminThemePref): void {
   try {
     localStorage.setItem(ADMIN_THEME_KEY, theme);
   } catch (e) {

@@ -13,12 +13,15 @@
  *   tag_events/*                     Denetim kaydı (istemciye kapalı)
  *   rate_limits/*                    Hız sınırı sayaçları (istemciye kapalı)
  *   counters/*                       Parti numarası sayaçları (istemciye kapalı)
+ *   stats_daily/*, stats_shards/*    Günlük istatistik sayaçları (bkz. stats.ts)
+ *   scan_alerts/*                    Şüpheli okutma uyarıları (istemciye kapalı)
  */
 
 import { initializeApp } from 'firebase-admin/app';
 import { FieldValue, DocumentReference, Transaction } from 'firebase-admin/firestore';
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import {
   LIMITS, MAX_BATCH_SIZE, NOTICE_NOTE_MAX, NOTICE_TEXT, NOTICE_TYPES, NoticeType,
   PRODUCT_NAMES, PRODUCT_TYPES, ProductType, VEHICLE_PRODUCT,
@@ -28,6 +31,9 @@ import {
   requireStaff, requireString, sanitizeNote, sha256, yearMonthIstanbul,
 } from './helpers';
 import { sendPushToUser } from './push';
+import { bumpStat, dayKey, rollupShards } from './stats';
+
+export { adminOverview } from './overview';
 
 initializeApp();
 setGlobalOptions({ region: 'europe-west1', maxInstances: 10 });
@@ -60,9 +66,23 @@ export const scanTag = onCall(async (req) => {
   const tag = snap.data()!;
   if (tag.productType !== VEHICLE_PRODUCT) return { status: 'not_found' };
 
-  // Okutma sayacı; hata olursa ziyaretçiyi etkilemesin.
-  tagRef.update({ scanCount: FieldValue.increment(1), lastScanAt: FieldValue.serverTimestamp() })
-    .catch(() => undefined);
+  // Okutma sayacı ve saatlik yoğunluk takibi; hata olursa ziyaretçiyi etkilemesin.
+  const hourKey = new Date().toISOString().slice(0, 13);
+  const hourCount = tag.scanHourKey === hourKey ? (Number(tag.scanHourCount) || 0) + 1 : 1;
+  tagRef.update({
+    scanCount: FieldValue.increment(1),
+    lastScanAt: FieldValue.serverTimestamp(),
+    scanHourKey: hourKey,
+    scanHourCount: hourCount,
+  }).catch(() => undefined);
+  if (hourCount === LIMITS.scanAlertPerHour) {
+    // Kopyalanmış ya da kötüye kullanılan etiket şüphesi: Genel Bakış'ta uyarı olarak görünür.
+    const alert = { code, serial: tag.tagId || null, count: hourCount, at: FieldValue.serverTimestamp() };
+    db().collection('scan_alerts').add(alert).catch(() => undefined);
+    db().collection('tag_events').add({ action: 'scan_alert', code, by: null, count: hourCount, at: FieldValue.serverTimestamp() })
+      .catch(() => undefined);
+  }
+  await bumpStat('scans');
 
   const status = tag.status as TagStatus;
   const isOwner = !!req.auth && req.auth.uid === tag.assignedUserId;
@@ -132,6 +152,13 @@ export const sendNotice = onCall(async (req) => {
 
   // Araç sahibinin telefonuna anlık bildirim (ücretsiz web push).
   const plate = maskPlate(v.plateNumber);
+  await Promise.all([
+    bumpStat('notices'),
+    db().collection('tag_events').add({
+      action: 'notice_sent', code, vehicleId: tag.assignedVehicleId, plateMasked: plate, noticeType: type,
+      by: req.auth?.uid || null, at: FieldValue.serverTimestamp(),
+    }).catch(() => undefined),
+  ]);
   await sendPushToUser(v.ownerUid, {
     title: `🚗 ${plate || 'Aracınız'}`,
     body: note ? `${NOTICE_TEXT[type]}: "${note.slice(0, 100)}"` : NOTICE_TEXT[type],
@@ -154,7 +181,9 @@ export const claimTag = onCall(async (req) => {
 
   await rateLimit(`claim:uid:${uid}`, LIMITS.claimPerUser[0], LIMITS.claimPerUser[1]);
 
-  return db().runTransaction(async (tx) => {
+  let firstLink = false;
+  const result = await db().runTransaction(async (tx) => {
+    firstLink = false;
     const tagRef = tagsCol().doc(code);
     const vRef = vehiclesCol().doc(vehicleId);
     const [tagSnap, vSnap] = await Promise.all([tx.get(tagRef), tx.get(vRef)]);
@@ -196,8 +225,11 @@ export const claimTag = onCall(async (req) => {
       tx.update(oldVehicleRef, { tagCode: null, tagSerial: null, updatedAt: FieldValue.serverTimestamp() });
     }
     logEvent(tx, { code, action: oldVehicleRef ? 'moved' : 'claimed', by: uid, vehicleId });
+    firstLink = !oldVehicleRef;
     return { result: 'OK', serial: tag.tagId || null };
   });
+  if (result.result === 'OK' && firstLink) await bumpStat('claims');
+  return result;
 });
 
 // ===========================================================================
@@ -429,3 +461,15 @@ export const sendTestPush = onCall(async (req) => {
   });
   return { sent };
 });
+
+// ===========================================================================
+// 9) ZAMANLANMIŞ: Günlük sayaç parçalarını her gece tek belgede topla
+// ===========================================================================
+
+export const rollupDailyStats = onSchedule(
+  { schedule: '15 0 * * *', timeZone: 'Europe/Istanbul', retryCount: 3 },
+  async () => {
+    const days = await rollupShards(dayKey());
+    console.log(`[stats] ${days} gün toplandı`);
+  },
+);

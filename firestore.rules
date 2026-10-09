@@ -102,6 +102,45 @@ service cloud.firestore {
       }
     }
 
+    // ------------------------------------------------------------ Yönetici profili
+    match /admin_profiles/{uid} {
+      allow read: if isStaff();
+      allow create, update: if isStaff() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['displayName', 'phone', 'photoDataUrl', 'updatedAt'])
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 60
+        && request.resource.data.phone is string && request.resource.data.phone.size() <= 20
+        && (request.resource.data.photoDataUrl == null
+            || (request.resource.data.photoDataUrl is string
+                && request.resource.data.photoDataUrl.size() < 80000
+                && request.resource.data.photoDataUrl.matches('data:image/jpeg;base64,[A-Za-z0-9+/=]+')));
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------ Yönetici oturumları
+    // Her yönetici yalnızca kendi oturum kayıtlarını görür; kayıtlar silinmez,
+    // yalnızca "kapatıldı" olarak işaretlenir (geri açılamaz).
+    match /admin_sessions/{sessionId} {
+      // Tek kayıt: resource == null, henüz oluşturulmamış kaydın varlık kontrolüne izin verir (içerik sızdırmaz).
+      allow get: if isStaff() && (resource == null || resource.data.uid == request.auth.uid);
+      // Liste sorgusu: yalnızca where('uid', '==', kendi uid) ile yapılabilir.
+      allow list: if isStaff() && resource.data.uid == request.auth.uid;
+      allow create: if isStaff()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'device', 'userAgent', 'createdAt', 'lastActiveAt', 'expiresAt', 'revoked'])
+        && request.resource.data.revoked == false
+        && request.resource.data.device is string && request.resource.data.device.size() <= 60
+        && request.resource.data.userAgent is string && request.resource.data.userAgent.size() <= 200
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.expiresAt <= request.resource.data.createdAt + duration.value(8, 'h');
+      allow update: if isStaff()
+        && resource.data.uid == request.auth.uid
+        && changedOnly(['lastActiveAt', 'revoked', 'revokedAt'])
+        && request.resource.data.revoked is bool
+        && (resource.data.revoked == false || request.resource.data.revoked == true);
+      allow delete: if false;
+    }
+
     // ------------------------------------------------------------ Üretim partileri
     match /production_batches/{batchId} {
       allow read: if isStaff();
@@ -156,10 +195,30 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // ------------------------------------------------------------ Kampanya işaretleri (Genel Bakış grafiği)
+    match /campaigns/{id} {
+      allow read, delete: if isStaff();
+      allow create: if isStaff()
+        && request.resource.data.keys().hasOnly(['title', 'start', 'end', 'createdBy', 'createdAt'])
+        && request.resource.data.title is string
+        && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 60
+        && request.resource.data.start is string && request.resource.data.start.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.end is string && request.resource.data.end.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+        && request.resource.data.start <= request.resource.data.end
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.createdAt == request.time;
+      allow update: if false;
+    }
+
     // ------------------------------------------------------------ Sunucuya özel
     match /tag_events/{id}   { allow read: if isStaff(); allow write: if false; }
     match /rate_limits/{id}  { allow read, write: if false; }
     match /counters/{id}     { allow read, write: if false; }
+    // İstatistik sayaçları ve şüpheli okutma uyarıları yalnızca sunucuda okunur/yazılır.
+    match /stats_daily/{id}  { allow read, write: if false; }
+    match /stats_shards/{id} { allow read, write: if false; }
+    match /stats_meta/{id}   { allow read, write: if false; }
+    match /scan_alerts/{id}  { allow read, write: if false; }
 
     // Listelenmeyen her şey kapalı.
     match /{document=**} {
