@@ -120,6 +120,18 @@ service cloud.firestore {
     // ------------------------------------------------------------ Kullanıcı profili
     match /users/{userId} {
       allow read, write: if signedIn() && request.auth.uid == userId;
+
+      // Bu kullanıcının cihazlarına ait web push jetonları
+      match /push_tokens/{tokenId} {
+        allow read, delete: if signedIn() && request.auth.uid == userId;
+        allow create, update: if signedIn() && request.auth.uid == userId
+          && request.resource.data.keys().hasOnly(['token', 'platform', 'userAgent', 'updatedAt'])
+          && request.resource.data.token is string
+          && request.resource.data.token.size() < 4096
+          && request.resource.data.platform in ['ios', 'android', 'web']
+          && request.resource.data.userAgent is string
+          && request.resource.data.userAgent.size() <= 200;
+      }
     }
 
     // ------------------------------------------------------------ Şifreli kasa (sıfır bilgi)

@@ -16,6 +16,7 @@ export const sendNoticeFn = call<{ code: string; type: NoticeType; note?: string
 export const claimTagFn = call<{ code: string; vehicleId: string }, { result: ClaimResult; serial?: string | null }>('claimTag');
 export const unlinkTagFn = call<{ vehicleId: string }, { result: 'OK' | 'NO_TAG' }>('unlinkTag');
 export const reportTagLostFn = call<{ code: string }, { result: 'OK' }>('reportTagLost');
+export const sendTestPushFn = call<Record<string, never>, { sent: number }>('sendTestPush');
 
 export const adminCreateBatchFn = call<
   { productType: 'OQ' | 'MQ' | 'KQ'; count: number; notes?: string },

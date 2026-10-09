@@ -14,6 +14,7 @@ import {
   claimTagFn, extractTagCode, formatCode, functionErrorMessage, reportTagLostFn, unlinkTagFn,
 } from '../lib/functionsClient';
 import { QrScannerModal } from './QrScannerModal';
+import { PushSettingsCard } from './PushSettingsCard';
 
 export type SubTab = 'details' | 'qr';
 
@@ -186,6 +187,8 @@ export const VehicleCardView: React.FC<VehicleCardViewProps> = ({
               </button>
             )}
           </div>
+
+          <PushSettingsCard uid={user.uid} isDark={isDark} />
 
           {showAdd && (
             <div className={`rounded-2xl border p-4 ${card}`}>

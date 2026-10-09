@@ -27,6 +27,15 @@ export const NOTICE_TYPES = ['blocking', 'lights', 'window', 'alarm', 'other'] a
 export type NoticeType = (typeof NOTICE_TYPES)[number];
 export const NOTICE_NOTE_MAX = 200;
 
+/** Bildirim metinleri (araç sahibinin telefonunda görünür) */
+export const NOTICE_TEXT: Record<NoticeType, string> = {
+  blocking: 'Aracınız yolu / çıkışı kapatıyor',
+  lights: 'Farlarınız açık kalmış',
+  window: 'Camınız veya kapınız açık',
+  alarm: 'Alarm çalıyor / araca temas oldu',
+  other: 'Yeni bir mesajınız var',
+};
+
 /** Hız sınırları: [adet, saniye] */
 export const LIMITS = {
   scanPerIp: [60, 3600],
@@ -36,6 +45,7 @@ export const LIMITS = {
   noticePerTag: [20, 3600],
   noticePerIpTag: [3, 600],
   adminBatchPerUser: [20, 3600],
+  testPushPerUser: [5, 3600],
 } as const;
 
 export const MAX_BATCH_SIZE = 1000;

@@ -28,6 +28,7 @@ import { fetchCardFromFirestore, fetchUserCard, saveCardToFirestore, listenToCar
 import { User } from 'firebase/auth';
 import { Language, ThemeMode, translations } from './lib/i18n';
 import { extractTagCode } from './lib/functionsClient';
+import { disablePushOnThisDevice } from './lib/pushService';
 
 type AppTab = 'home' | 'sos' | 'personal' | 'vehicle' | 'dashboard' | 'vault' | 'print_nfc' | 'admin';
 type SosSubTab = 'details' | 'qr' | 'nfc';
@@ -223,6 +224,8 @@ export function App() {
   };
 
   const handleLogout = async () => {
+    // Bu telefon, çıkış yapan hesabın bildirimlerini almaya devam etmesin.
+    if (user) await disablePushOnThisDevice(user.uid).catch(() => undefined);
     clearCustomerSession();
     await logoutUser();
     clearStoredCardData();

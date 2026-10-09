@@ -20,13 +20,14 @@ import { FieldValue, DocumentReference, Transaction } from 'firebase-admin/fires
 import { setGlobalOptions } from 'firebase-functions/v2';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import {
-  LIMITS, MAX_BATCH_SIZE, NOTICE_NOTE_MAX, NOTICE_TYPES, NoticeType,
+  LIMITS, MAX_BATCH_SIZE, NOTICE_NOTE_MAX, NOTICE_TEXT, NOTICE_TYPES, NoticeType,
   PRODUCT_NAMES, PRODUCT_TYPES, ProductType, VEHICLE_PRODUCT,
 } from './config';
 import {
   clientIp, db, generateCode, maskPlate, parseCode, rateLimit, requireAuth,
   requireStaff, requireString, sanitizeNote, sha256, yearMonthIstanbul,
 } from './helpers';
+import { sendPushToUser } from './push';
 
 initializeApp();
 setGlobalOptions({ region: 'europe-west1', maxInstances: 10 });
@@ -128,6 +129,15 @@ export const sendNotice = onCall(async (req) => {
     senderHash: sha256(`${ip}:${code}`).slice(0, 16),
   });
   await vRef.update({ unreadNotices: FieldValue.increment(1), lastNoticeAt: FieldValue.serverTimestamp() });
+
+  // Araç sahibinin telefonuna anlık bildirim (ücretsiz web push).
+  const plate = maskPlate(v.plateNumber);
+  await sendPushToUser(v.ownerUid, {
+    title: `🚗 ${plate || 'Aracınız'}`,
+    body: note ? `${NOTICE_TEXT[type]}: "${note.slice(0, 100)}"` : NOTICE_TEXT[type],
+    url: '/?view=vehicle',
+    tag: `arac-${tag.assignedVehicleId}`,
+  });
 
   return { ok: true };
 });
@@ -272,31 +282,37 @@ export const adminCreateBatch = onCall({ timeoutSeconds: 120 }, async (req) => {
   const yearMonth = yearMonthIstanbul();
   const nowIso = new Date().toISOString();
 
-  // Parti numarasını çakışmasız ayır.
+  // Parti numarasını çakışmasız ayır ve parti kaydını aynı işlemde oluştur.
+  // Eski sistemden kalan aynı adlı partiler (örn. BATCH-2610-OQ-B01) atlanır.
   const counterRef = db().collection('counters').doc(`batch_${yearMonth}_${productType}`);
-  const batchIndex = await db().runTransaction(async (tx) => {
+  const batchesCol = db().collection('production_batches');
+  const { batchId, batchNumber } = await db().runTransaction(async (tx) => {
     const snap = await tx.get(counterRef);
-    const next = (snap.exists ? Number(snap.data()?.value) || 0 : 0) + 1;
-    tx.set(counterRef, { value: next });
-    return next;
-  });
-  const batchNumber = `B${String(batchIndex).padStart(2, '0')}`;
-  const batchId = `BATCH-${yearMonth}-${productType}-${batchNumber}`;
-
-  await db().collection('production_batches').doc(batchId).create({
-    id: batchId,
-    batchNumber,
-    productType,
-    productName: PRODUCT_NAMES[productType],
-    prefix,
-    yearMonth,
-    totalCount: count,
-    status: 'STATUS_CREATED',
-    notes,
-    createdBy: staff.email,
-    createdAt: nowIso,
-    updatedAt: nowIso,
-    createdAtFirestore: FieldValue.serverTimestamp(),
+    let index = (snap.exists ? Number(snap.data()?.value) || 0 : 0) + 1;
+    for (let attempt = 0; attempt < 99; attempt++, index++) {
+      const number = `B${String(index).padStart(2, '0')}`;
+      const id = `BATCH-${yearMonth}-${productType}-${number}`;
+      const existing = await tx.get(batchesCol.doc(id));
+      if (existing.exists) continue;
+      tx.set(counterRef, { value: index });
+      tx.create(batchesCol.doc(id), {
+        id,
+        batchNumber: number,
+        productType,
+        productName: PRODUCT_NAMES[productType],
+        prefix,
+        yearMonth,
+        totalCount: count,
+        status: 'STATUS_CREATED',
+        notes,
+        createdBy: staff.email,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        createdAtFirestore: FieldValue.serverTimestamp(),
+      });
+      return { batchId: id, batchNumber: number };
+    }
+    throw new HttpsError('resource-exhausted', 'Bu ay için boş parti numarası bulunamadı.');
   });
 
   // Etiketler 400'lük gruplar halinde yazılır (Firestore toplu yazma sınırı 500).
@@ -395,4 +411,21 @@ export const adminSetTagStatus = onCall(async (req) => {
     logEvent(tx, { code, action: `admin_${action}`, by: staff.uid, byEmail: staff.email, note: note || null });
     return { result: 'OK', status: update.status };
   });
+});
+
+// ===========================================================================
+// 8) ARAÇ SAHİBİ: Bu hesabın cihazlarına deneme bildirimi
+// ===========================================================================
+
+export const sendTestPush = onCall(async (req) => {
+  const { uid } = requireAuth(req);
+  await rateLimit(`push:test:${uid}`, LIMITS.testPushPerUser[0], LIMITS.testPushPerUser[1],
+    'Çok fazla deneme bildirimi gönderildi. Lütfen biraz sonra tekrar deneyin.');
+  const sent = await sendPushToUser(uid, {
+    title: '🔔 Bildirimler açık',
+    body: 'Aracınızın QR kodu okutulup bildirim gönderildiğinde bu şekilde haber vereceğiz.',
+    url: '/?view=vehicle',
+    tag: 'test',
+  });
+  return { sent };
 });
