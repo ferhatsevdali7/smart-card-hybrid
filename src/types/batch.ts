@@ -1,4 +1,4 @@
-﻿// src/types/batch.ts
+// src/types/batch.ts
 // Endüstriyel Parti (Batch) ve Seri Numaralandırma Tipleri
 
 export type BatchStatus = 
@@ -31,10 +31,10 @@ export interface BatchItem {
 export interface BatchTagItem {
   tagId: string; // örn: HF-OQ-2604-B01-0001
   batchId: string; // BATCH-202604-B01
-  secretKey: string; // Kripto PIN örn: 8A9F21KC
+  code: string; // QR'daki rastgele 12 karakterlik kod örn: K7M2QX9P4RTA
   productType: ProductType;
   sequenceNumber: number; // 1, 2, 3...
-  status: 'unclaimed' | 'active' | 'disabled';
+  status: 'unclaimed' | 'active' | 'disabled' | 'expired';
   assignedPlate?: string | null;
   assignedUserEmail?: string | null;
   assignedUserId?: string | null;

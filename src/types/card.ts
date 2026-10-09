@@ -68,15 +68,20 @@ export interface VehicleInfo {
 // ---------------- QR BANK / TAG REGISTRY TYPES ----------------
 export type QrTagStatus = 'unclaimed' | 'active' | 'disabled' | 'expired';
 
+/** tags koleksiyonundaki etiket kaydı (yönetici görünümü) */
 export interface QrTagItem {
-  tagId: string; // örn: AK-2026-0001
-  secretKey: string; // Kripto doğrulama tokenı örn: 8a9f21
+  code: string; // QR'daki rastgele 12 karakterlik kod (belge kimliği) örn: K7M2QX9P4RTA
+  tagId: string; // Okunaklı seri no örn: HF-OQ-2610-B01-0001
+  batchId?: string;
+  productType?: 'OQ' | 'MQ' | 'KQ';
   status: QrTagStatus;
-  batchNumber: string; // BATCH-2026-01
+  batchNumber: string; // BATCH-2610-OQ-B01 (not)
   assignedUserId?: string | null;
   assignedUserEmail?: string | null;
+  assignedVehicleId?: string | null;
   assignedPlate?: string | null;
-  assignedCardId?: string | null;
+  disabledReason?: 'lost' | 'admin' | null;
+  scanCount?: number;
   createdAt: string;
   activatedAt?: string | null;
   notes?: string;

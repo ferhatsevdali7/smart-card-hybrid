@@ -1,54 +1,157 @@
 rules_version = '2';
+
+// =====================================================================
+//  Akıllı Araç Kartı - Firestore Güvenlik Kuralları (v2)
+//
+//  İlke: QR etiketlerini değiştiren her işlem Cloud Functions üzerinden
+//  yapılır. İstemci etiketlere ASLA yazamaz. Ziyaretçi araç verisini
+//  doğrudan okuyamaz; yalnızca scanTag fonksiyonunun döndürdüğü güvenli
+//  alanları görür (telefon numarası hiçbir zaman gönderilmez).
+// =====================================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Helper function to check if request is from authenticated user
-    function isAuthenticated() {
+
+    // ------------------------------------------------------------ yardımcılar
+    function signedIn() {
       return request.auth != null;
     }
-    
-    // Helper function to check if user is a registered staff member
+
+    function myEmail() {
+      return signedIn() && request.auth.token.email is string
+        ? request.auth.token.email.lower()
+        : '';
+    }
+
+    // functions/src/config.ts -> SUPER_ADMIN_EMAILS ile aynı olmalı
+    function isSuperAdmin() {
+      return myEmail() in ['sevdaliferhat64@gmail.com', 'hasimturcan199@gmail.com'];
+    }
+
     function isStaff() {
-      return isAuthenticated() && (
-        exists(/databases/$(database)/documents/staff_members/$(request.auth.token.email)) ||
-        request.auth.token.email == 'sevdaliferhat64@gmail.com' ||
-        request.auth.token.email == 'hasimturcan199@gmail.com'
+      return isSuperAdmin() || (
+        signedIn()
+        && request.auth.token.email_verified == true
+        && exists(/databases/$(database)/documents/staff_members/$(myEmail()))
+        && get(/databases/$(database)/documents/staff_members/$(myEmail())).data.isActive != false
       );
     }
 
-    // Public cards collection (Individual card get allowed for public QR scan, mass listing strictly blocked)
-    match /cards/{cardId} {
-      allow get: if true;
-      allow list: if false; // BLOCK MASS HARVESTING
-      allow write: if isAuthenticated();
+    function changedOnly(fields) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields);
     }
 
-    // User profiles
-    match /users/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    // ------------------------------------------------------------ QR etiketleri
+    // Okuma: yalnızca etiketin sahibi (kendi etiketi) ve yöneticiler.
+    // Yazma: hiç kimse (yalnızca Cloud Functions).
+    match /tags/{code} {
+      allow get: if isStaff() || (signedIn() && resource.data.assignedUserId == request.auth.uid);
+      allow list: if isStaff();
+      allow write: if false;
     }
 
-    // Zero-knowledge encrypted vaults
-    match /vaults/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    // ------------------------------------------------------------ Araçlar
+    function validVehicle(d) {
+      return d.keys().hasOnly([
+          'ownerUid', 'plateNumber', 'brandModel', 'ownerName', 'contactPhone',
+          'parkingNote', 'allowMessages', 'tagCode', 'tagSerial',
+          'unreadNotices', 'lastNoticeAt', 'createdAt', 'updatedAt'
+        ])
+        && d.plateNumber is string && d.plateNumber.size() >= 2 && d.plateNumber.size() <= 16
+        && (!('brandModel' in d) || (d.brandModel is string && d.brandModel.size() <= 60))
+        && (!('ownerName' in d) || (d.ownerName is string && d.ownerName.size() <= 60))
+        && (!('contactPhone' in d) || (d.contactPhone is string && d.contactPhone.size() <= 20))
+        && (!('parkingNote' in d) || (d.parkingNote is string && d.parkingNote.size() <= 200))
+        && (!('allowMessages' in d) || d.allowMessages is bool);
     }
 
-    // 🔒 STRICT SECURITY: Staff & Roles Collection (Only verified staff can read, only super admin can write)
-    match /staff_members/{email} {
-      allow read, write: if isStaff();
+    match /vehicles/{vehicleId} {
+      allow read: if signedIn() && resource.data.ownerUid == request.auth.uid;
+
+      // Yeni araç: sahibi kendisi, etiket bağlı değil.
+      allow create: if signedIn()
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.get('tagCode', null) == null
+        && request.resource.data.get('tagSerial', null) == null
+        && request.resource.data.get('unreadNotices', 0) == 0
+        && validVehicle(request.resource.data);
+
+      // Güncelleme: sahiplik ve etiket alanları değiştirilemez (onlar sunucuda).
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && validVehicle(request.resource.data)
+        && !request.resource.data.diff(resource.data).affectedKeys()
+              .hasAny(['ownerUid', 'tagCode', 'tagSerial', 'lastNoticeAt'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['unreadNotices'])
+            || request.resource.data.unreadNotices == 0);
+
+      // Silme: önce QR etiketi araçtan ayrılmalı.
+      allow delete: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && resource.data.get('tagCode', null) == null;
+
+      // Ziyaretçi bildirimleri: yalnızca sunucu oluşturur, sahibi okur.
+      match /notices/{noticeId} {
+        function ownsVehicle() {
+          return signedIn()
+            && get(/databases/$(database)/documents/vehicles/$(vehicleId)).data.ownerUid == request.auth.uid;
+        }
+        allow read, delete: if ownsVehicle();
+        allow update: if ownsVehicle() && changedOnly(['read']) && request.resource.data.read is bool;
+        allow create: if false;
+      }
     }
 
-    // 🔒 STRICT SECURITY: Physical QR Registry Bank
-    // Individual tag lookup allowed for claiming/activation; mass registry listing allowed ONLY for staff
-    match /qr_registry/{tagId} {
-      allow get: if true;
-      allow list: if isStaff(); // BLOCK MASS PIN & EMAIL HARVESTING
-      allow write: if isStaff() || isAuthenticated();
-    }
-
-    // 🔒 STRICT SECURITY: Production Batches (Only staff can read and manage batches)
+    // ------------------------------------------------------------ Üretim partileri
     match /production_batches/{batchId} {
-      allow read, write: if isStaff();
+      allow read: if isStaff();
+      // Oluşturma sunucuda; yöneticiler yalnızca yaşam döngüsü durumunu günceller.
+      allow update: if isStaff()
+        && changedOnly(['status', 'updatedBy', 'updatedAt', 'updatedAtFirestore']);
+      allow create, delete: if false;
+    }
+
+    // ------------------------------------------------------------ Personel
+    match /staff_members/{email} {
+      allow read: if isStaff();
+      allow write: if isSuperAdmin();
+    }
+
+    // ------------------------------------------------------------ Kullanıcı profili
+    match /users/{userId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    // ------------------------------------------------------------ Şifreli kasa (sıfır bilgi)
+    match /vaults/{userId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    // ------------------------------------------------------------ SOS / Sosyal kart (rafta)
+    // Herkese açık okuma kapatıldı; yalnızca kart sahibi okuyup yazabilir.
+    match /cards/{cardId} {
+      allow read: if signedIn() && resource.data.get('ownerUid', null) == request.auth.uid;
+      allow create: if signedIn() && request.resource.data.get('ownerUid', null) == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.get('ownerUid', null) == request.auth.uid
+        && request.resource.data.get('ownerUid', null) == request.auth.uid;
+      allow delete: if signedIn() && resource.data.get('ownerUid', null) == request.auth.uid;
+    }
+
+    // ------------------------------------------------------------ Eski sistem (salt okunur)
+    match /qr_registry/{tagId} {
+      allow read: if isStaff();
+      allow write: if false;
+    }
+
+    // ------------------------------------------------------------ Sunucuya özel
+    match /tag_events/{id}   { allow read: if isStaff(); allow write: if false; }
+    match /rate_limits/{id}  { allow read, write: if false; }
+    match /counters/{id}     { allow read, write: if false; }
+
+    // Listelenmeyen her şey kapalı.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

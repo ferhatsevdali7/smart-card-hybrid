@@ -29,9 +29,9 @@ import {
 import { 
   generateLogodQrSvg, 
   generateLogodQrPng, 
-  downloadSingleQr, 
-  getTagActivationUrl 
+  downloadSingleQr
 } from '../lib/qrVectorEngine';
+import { formatCode } from '../lib/functionsClient';
 import { BatchItem, BatchStatus, BatchTagItem, ProductType } from '../types/batch';
 import { getAdminLang } from '../lib/adminSessionService';
 
@@ -170,7 +170,7 @@ export const BatchProductionView: React.FC<BatchProductionViewProps> = ({ adminE
     setCopiedUrl(false);
     setPreviewSvg(null);
     try {
-      const pngData = await generateLogodQrPng(tag.tagId, tag.secretKey, 600);
+      const pngData = await generateLogodQrPng(tag.code, 600);
       setPreviewSvg(pngData);
     } catch (e) {
       console.error('QR görseli üretilemedi:', e);
@@ -285,7 +285,7 @@ export const BatchProductionView: React.FC<BatchProductionViewProps> = ({ adminE
                   </th>
                   <th className="py-3 px-4">SIRA</th>
                   <th className="py-3 px-4">SERİ NUMARASI (TAG ID)</th>
-                  <th className="py-3 px-4">GÜVENLİK PIN</th>
+                  <th className="py-3 px-4">QR KODU</th>
                   <th className="py-3 px-4">DURUM</th>
                   <th className="py-3 px-4">EŞLEŞEN PLAKA</th>
                   <th className="py-3 px-4">KULLANICI</th>
@@ -327,7 +327,7 @@ export const BatchProductionView: React.FC<BatchProductionViewProps> = ({ adminE
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-2">
                           <span className={isPinVisible ? 'text-emerald-400 font-bold' : 'text-neutral-500'}>
-                            {isPinVisible ? tag.secretKey : '••••••••'}
+                            {isPinVisible ? formatCode(tag.code) : '••••-••••-••••'}
                           </span>
                           <button
                             onClick={() => togglePin(tag.tagId)}
@@ -600,11 +600,11 @@ export const BatchProductionView: React.FC<BatchProductionViewProps> = ({ adminE
               )}
             </div>
 
-            {/* Güvenlik PIN ve Link Bilgisi */}
+            {/* QR Kodu Bilgisi */}
             <div className="p-3 bg-neutral-900 border border-neutral-800 rounded text-left font-mono text-xs space-y-1.5 mb-4">
               <div className="flex items-center justify-between">
-                <span className="text-neutral-500">Güvenlik PIN:</span>
-                <span className="text-emerald-400 font-bold tracking-wider">{previewTag.secretKey}</span>
+                <span className="text-neutral-500">QR Altı Kod:</span>
+                <span className="text-emerald-400 font-bold tracking-wider">{formatCode(previewTag.code)}</span>
               </div>
               <div className="flex items-center justify-between pt-1 border-t border-neutral-800">
                 <span className="text-neutral-500">Hata Toleransı:</span>
@@ -615,14 +615,14 @@ export const BatchProductionView: React.FC<BatchProductionViewProps> = ({ adminE
             {/* İndirme Butonları */}
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => downloadSingleQr(previewTag.tagId, previewTag.secretKey, 'svg')}
+                onClick={() => downloadSingleQr(previewTag.code, previewTag.tagId, 'svg')}
                 className="py-2 px-3 bg-neutral-800 hover:bg-neutral-700 border border-neutral-700 text-white text-xs font-semibold rounded flex items-center justify-center gap-1.5 transition-colors font-mono"
               >
                 <Download className="w-3.5 h-3.5 text-sky-400" />
                 <span>Vektörel SVG İndir</span>
               </button>
               <button
-                onClick={() => downloadSingleQr(previewTag.tagId, previewTag.secretKey, 'png')}
+                onClick={() => downloadSingleQr(previewTag.code, previewTag.tagId, 'png')}
                 className="py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded flex items-center justify-center gap-1.5 transition-colors font-mono"
               >
                 <Download className="w-3.5 h-3.5" />

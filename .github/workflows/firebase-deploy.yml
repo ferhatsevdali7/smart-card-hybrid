@@ -1,4 +1,4 @@
-﻿name: Deploy to Firebase Hosting
+name: Deploy to Firebase Hosting
 
 on:
   push:
@@ -35,7 +35,7 @@ jobs:
         if: github.ref == 'refs/heads/main'
         with:
           repoToken: '${{ secrets.GITHUB_TOKEN }}'
-          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_AKILLI_KART_SOS }}'
+          firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SMART_CARD_HYBRID }}'
           channelId: live
-          projectId: akilli-kart-sos
+          projectId: smart-card-hybrid
           entryPoint: akilli_kart_web

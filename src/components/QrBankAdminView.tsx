@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   QrCode, 
   Download, 
@@ -25,6 +25,7 @@ import {
 } from '../lib/qrBankService';
 import { QrTagItem, QrTagStatus } from '../types/card';
 import { getAdminLang } from '../lib/adminSessionService';
+import { formatCode } from '../lib/functionsClient';
 
 interface QrBankAdminViewProps {
   adminEmail: string;
@@ -60,7 +61,7 @@ export const QrBankAdminView: React.FC<QrBankAdminViewProps> = ({ adminEmail }) 
       active: 'Aktif Eşleşmiş',
       disabled: 'Pasif / İptal',
       colTagId: 'SERİ NO (TAG ID)',
-      colPin: 'GÜVENLİK PIN',
+      colPin: 'QR KODU',
       colStatus: 'DURUM',
       colPlate: 'EŞLEŞEN ARAÇ / PLAKA',
       colUser: 'KULLANICI HESABI',
@@ -91,7 +92,7 @@ export const QrBankAdminView: React.FC<QrBankAdminViewProps> = ({ adminEmail }) 
       active: 'Active Paired',
       disabled: 'Disabled',
       colTagId: 'SERIAL NO (TAG ID)',
-      colPin: 'SECURITY PIN',
+      colPin: 'QR CODE',
       colStatus: 'STATUS',
       colPlate: 'PAIRED VEHICLE / PLATE',
       colUser: 'USER ACCOUNT',
@@ -128,7 +129,7 @@ export const QrBankAdminView: React.FC<QrBankAdminViewProps> = ({ adminEmail }) 
     setGenerating(true);
     try {
       const created = await createBatchQrTags(batchNote, batchCount);
-      setBatchSuccessMsg(`${created.length} adet yeni seri numarası başarıyla üretildi.`);
+      setBatchSuccessMsg(`${created.count} adet yeni seri numarası başarıyla üretildi.`);
       setTimeout(() => {
         setShowBatchModal(false);
         setBatchSuccessMsg(null);
@@ -168,6 +169,7 @@ export const QrBankAdminView: React.FC<QrBankAdminViewProps> = ({ adminEmail }) 
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch = !q || 
       tag.tagId.toLowerCase().includes(q) ||
+      tag.code.toLowerCase().includes(q.replace(/-/g, '')) ||
       (tag.assignedPlate && tag.assignedPlate.toLowerCase().includes(q)) ||
       (tag.assignedUserEmail && tag.assignedUserEmail.toLowerCase().includes(q));
     return matchesStatus && matchesSearch;
@@ -312,7 +314,7 @@ export const QrBankAdminView: React.FC<QrBankAdminViewProps> = ({ adminEmail }) 
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
                         <span className={`font-mono ${isPinVisible ? 'text-emerald-400 font-bold' : 'text-neutral-500'}`}>
-                          {isPinVisible ? item.secretKey : '••••••••'}
+                          {isPinVisible ? formatCode(item.code) : '••••-••••-••••'}
                         </span>
                         <button
                           onClick={() => togglePin(item.tagId)}
@@ -371,7 +373,7 @@ export const QrBankAdminView: React.FC<QrBankAdminViewProps> = ({ adminEmail }) 
                     {/* İŞLEMLER */}
                     <td className="py-3 px-4 text-right space-x-2">
                       <button
-                        onClick={() => handleStatusChange(item.tagId, item.status)}
+                        onClick={() => handleStatusChange(item.code, item.status)}
                         className="px-2 py-1 text-[11px] border border-neutral-700 bg-neutral-800 hover:bg-neutral-700 text-neutral-300 rounded transition-colors"
                       >
                         {item.status === 'active' ? 'Durdur' : item.status === 'disabled' ? 'Aktifleştir' : 'Kilitle'}
@@ -379,7 +381,7 @@ export const QrBankAdminView: React.FC<QrBankAdminViewProps> = ({ adminEmail }) 
 
                       {item.status === 'active' && (
                         <button
-                          onClick={() => handleResetTag(item.tagId)}
+                          onClick={() => handleResetTag(item.code)}
                           className="px-2 py-1 text-[11px] border border-rose-900/60 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 rounded transition-colors"
                         >
                           {t.unlink}

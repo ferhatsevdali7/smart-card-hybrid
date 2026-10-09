@@ -1,21 +1,22 @@
-﻿// src/lib/qrVectorEngine.ts
+// src/lib/qrVectorEngine.ts
 // Endüstriyel Seviye Vektörel QR Motoru (Level H %30 + Siyah Zeminli H***F Rozeti)
 
 import QRCode from 'qrcode';
+import { tagUrl } from './functionsClient';
 
 /**
- * Aktivasyon URL'si üretir
+ * QR'a gömülecek bağlantı: https://smart-card-hybrid.web.app/t/{KOD}
+ * İçinde gizli anahtar veya sıralı numara YOKTUR.
  */
-export function getTagActivationUrl(tagId: string, secretKey: string): string {
-  const origin = window.location.origin;
-  return `${origin}/activate?tag=${encodeURIComponent(tagId)}&key=${encodeURIComponent(secretKey)}`;
+export function getTagUrl(code: string): string {
+  return tagUrl(code);
 }
 
 /**
  * Yüksek Çözünürlüklü ve Kusursuz Oranlanmış Logolu QR PNG Data URL Üretir
  */
-export async function generateLogodQrPng(tagId: string, secretKey: string, size = 800): Promise<string> {
-  const url = getTagActivationUrl(tagId, secretKey);
+export async function generateLogodQrPng(code: string, size = 800): Promise<string> {
+  const url = getTagUrl(code);
 
   // 1. Level H (High %30) Hata Toleranslı Temel Canvas Oluştur
   const canvas = document.createElement('canvas');
@@ -72,8 +73,8 @@ export async function generateLogodQrPng(tagId: string, secretKey: string, size 
 /**
  * Matbaa İçin Vektörel SVG Çıktısı Üretir
  */
-export async function generateLogodQrSvg(tagId: string, secretKey: string, size = 800): Promise<string> {
-  const url = getTagActivationUrl(tagId, secretKey);
+export async function generateLogodQrSvg(code: string, size = 800): Promise<string> {
+  const url = getTagUrl(code);
 
   // Ham SVG çıktısı al
   const rawSvg = await QRCode.toString(url, {
@@ -127,9 +128,9 @@ export async function generateLogodQrSvg(tagId: string, secretKey: string, size 
 /**
  * Tek Bir QR Görselini Dosya Olarak İndirir (SVG veya PNG)
  */
-export async function downloadSingleQr(tagId: string, secretKey: string, format: 'svg' | 'png' = 'png'): Promise<void> {
+export async function downloadSingleQr(code: string, tagId: string, format: 'svg' | 'png' = 'png'): Promise<void> {
   if (format === 'svg') {
-    const svgContent = await generateLogodQrSvg(tagId, secretKey, 1000);
+    const svgContent = await generateLogodQrSvg(code, 1000);
     const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -140,7 +141,7 @@ export async function downloadSingleQr(tagId: string, secretKey: string, format:
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   } else {
-    const pngUrl = await generateLogodQrPng(tagId, secretKey, 1200);
+    const pngUrl = await generateLogodQrPng(code, 1200);
     const a = document.createElement('a');
     a.href = pngUrl;
     a.download = `${tagId}_HF_QR.png`;

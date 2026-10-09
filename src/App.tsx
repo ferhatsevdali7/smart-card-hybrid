@@ -27,6 +27,7 @@ import { auth } from './lib/firebase';
 import { fetchCardFromFirestore, fetchUserCard, saveCardToFirestore, listenToCardUpdates } from './lib/firestoreService';
 import { User } from 'firebase/auth';
 import { Language, ThemeMode, translations } from './lib/i18n';
+import { extractTagCode } from './lib/functionsClient';
 
 type AppTab = 'home' | 'sos' | 'personal' | 'vehicle' | 'dashboard' | 'vault' | 'print_nfc' | 'admin';
 type SosSubTab = 'details' | 'qr' | 'nfc';
@@ -47,6 +48,8 @@ export function App() {
   const [sosSubTab, setSosSubTab] = useState<SosSubTab>('details');
   const [personalSubTab, setPersonalSubTab] = useState<PersonalSubTab>('details');
   const [vehicleSubTab, setVehicleSubTab] = useState<VehicleSubTab>('details');
+  // /t/KOD sayfasından "hesabıma bağla" ile gelen etiket kodu
+  const [pendingClaimCode, setPendingClaimCode] = useState<string | null>(null);
   const [expandedMenuCard, setExpandedMenuCard] = useState<'sos' | 'personal' | 'vehicle' | null>('sos');
 
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -147,14 +150,24 @@ export function App() {
       setActiveTab('personal');
       setIsPublicScan(true);
     } else if (view === 'vehicle') {
+      // Araç kartı artık herkese açık değil: ziyaretçiler /t/KOD sayfasını görür.
       setActiveTab('vehicle');
-      setIsPublicScan(true);
+      setIsPublicScan(false);
+      const claim = params.get('claim');
+      if (claim) {
+        const code = extractTagCode(claim);
+        if (code) {
+          setPendingClaimCode(code);
+          setVehicleSubTab('qr');
+        }
+        window.history.replaceState(null, '', `${window.location.pathname}?view=vehicle`);
+      }
     } else if (view === 'admin') {
       setActiveTab('admin');
       setIsPublicScan(false);
     }
 
-    if (id) {
+    if (id && view !== 'vehicle') {
       // SECURITY: When scanning a public card, do NOT persist to visitor's localStorage!
       fetchCardFromFirestore(id).then((loadedCard) => {
         if (loadedCard) {
@@ -626,7 +639,7 @@ export function App() {
                             }`}
                           >
                             <CarFront className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                            <span>{language === 'tr' ? 'araç kartı bilgileri/ düzele' : 'Vehicle Card Info / Edit'}</span>
+                            <span>{language === 'tr' ? 'Araçlarım' : 'My Vehicles'}</span>
                           </button>
 
                           <button
@@ -638,7 +651,7 @@ export function App() {
                             }`}
                           >
                             <QrCode className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-                            <span>{language === 'tr' ? 'araç kart QR' : 'Vehicle Card QR'}</span>
+                            <span>{language === 'tr' ? 'QR Bağla' : 'Link QR'}</span>
                           </button>
                         </div>
                       )}
@@ -797,17 +810,15 @@ export function App() {
         )}
 
         {activeTab === 'vehicle' && (
-          <VehicleCardView 
-            vehicle={(user || isPublicScan || isOffline) ? (card.vehicle || DEMO_CARD_DATA.vehicle) : DEMO_CARD_DATA.vehicle}
-            cardId={(user || isPublicScan || isOffline) ? card.cardId : DEMO_CARD_DATA.cardId} 
+          <VehicleCardView
+            user={user}
             lang={language}
             theme={theme}
-            isPublicScan={isPublicScan}
-            isOwner={!!user}
             subTab={vehicleSubTab}
             onSubTabChange={(s) => setVehicleSubTab(s)}
             onOpenAuth={() => setIsAuthModalOpen(true)}
-            onUpdateVehicle={handleUpdateVehicle}
+            pendingClaimCode={pendingClaimCode}
+            onPendingClaimHandled={() => setPendingClaimCode(null)}
           />
         )}
 

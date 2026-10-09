@@ -1,7 +1,9 @@
-import { StrictMode } from 'react'
+import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import App from './App'
+// Ana uygulama ayrı parçada yüklenir; QR okutan ziyaretçi 3D/yönetici kodunu indirmez.
+const App = lazy(() => import('./App'))
+import { PublicTagScanPage } from './components/PublicTagScanPage'
 
 // Register Service Worker for offline emergency access
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
@@ -12,9 +14,14 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   });
 }
 
+// /t/{KOD}: QR okutulduğunda açılan bağımsız ziyaretçi sayfası
+const tagMatch = window.location.pathname.match(/^\/t\/([A-Za-z0-9-]+)\/?$/);
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    {tagMatch
+      ? <PublicTagScanPage code={tagMatch[1].toUpperCase().replace(/[^A-Z0-9]/g, '')} />
+      : <Suspense fallback={<div className="min-h-screen bg-slate-950" />}><App /></Suspense>}
   </StrictMode>,
 )
 
