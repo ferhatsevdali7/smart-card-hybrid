@@ -1,8 +1,7 @@
-const CACHE_NAME = 'smart-card-v2';
+﻿const CACHE_NAME = 'smart-card-v4-hf-brand';
 const STATIC_ASSETS = [
   '/',
-  '/index.html',
-  '/favicon.svg',
+  '/hf_icon_v3.svg',
   '/manifest.webmanifest'
 ];
 
@@ -48,7 +47,6 @@ self.addEventListener('fetch', (event) => {
           return networkResponse;
         })
         .catch(() => {
-          // Return cached index.html so SPA router & cached card data loads offline
           return caches.match('/index.html');
         })
     );

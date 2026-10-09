@@ -15,16 +15,20 @@ import { DashboardView } from './components/DashboardView';
 import { QrCodeExporter } from './components/QrCodeExporter';
 import { NfcPayloadHelper } from './components/NfcPayloadHelper';
 import { CryptoVaultView } from './components/CryptoVaultView';
+import { AdminDashboardContainer } from './components/AdminDashboardContainer';
+import { getAdminSession } from './lib/adminSessionService';
+import { isCustomerLoggedIn, markCustomerLoggedIn, clearCustomerSession } from './lib/customerSessionService';
 import { AuthModal } from './components/AuthModal';
 import { AccountProfileModal } from './components/AccountProfileModal';
 import { HelpSupportModal } from './components/HelpSupportModal';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import { subscribeToAuth, logoutUser } from './lib/authService';
+import { auth } from './lib/firebase';
 import { fetchCardFromFirestore, fetchUserCard, saveCardToFirestore, listenToCardUpdates } from './lib/firestoreService';
 import { User } from 'firebase/auth';
 import { Language, ThemeMode, translations } from './lib/i18n';
 
-type AppTab = 'home' | 'sos' | 'personal' | 'vehicle' | 'dashboard' | 'vault' | 'print_nfc';
+type AppTab = 'home' | 'sos' | 'personal' | 'vehicle' | 'dashboard' | 'vault' | 'print_nfc' | 'admin';
 type SosSubTab = 'details' | 'qr' | 'nfc';
 type PersonalSubTab = 'details' | 'qr' | 'nfc';
 type VehicleSubTab = 'details' | 'qr';
@@ -33,7 +37,13 @@ export function App() {
   const [card, setCard] = useState<SmartCard>(() => {
     return getStoredCardData() || DEMO_CARD_DATA;
   });
-  const [activeTab, setActiveTab] = useState<AppTab>('home');
+  const [activeTab, setActiveTab] = useState<AppTab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'admin') {
+      return 'admin';
+    }
+    return 'home';
+  });
   const [sosSubTab, setSosSubTab] = useState<SosSubTab>('details');
   const [personalSubTab, setPersonalSubTab] = useState<PersonalSubTab>('details');
   const [vehicleSubTab, setVehicleSubTab] = useState<VehicleSubTab>('details');
@@ -76,44 +86,50 @@ export function App() {
     };
   }, []);
 
-  // Track Firebase Auth State & Bind User Cards with Local Cache Persistence
-  useEffect(() => {
-    const unsubscribe = subscribeToAuth(async (currentUser) => {
+  const syncCustomerUser = async (currentUser: User | null) => {
+    // SADECE son kullanıcı arayüzünden bilinçli giriş yapılmışsa müşteri oturumu aç
+    if (currentUser && isCustomerLoggedIn()) {
       setUser(currentUser);
-      if (currentUser) {
-        // Load user's own card if available
-        const userCard = await fetchUserCard(currentUser.uid);
-        if (userCard) {
-          setCard(userCard);
-          saveStoredCardData(userCard);
-        } else {
-          // Initialize user's card if none exists
-          const customId = `CARD-${currentUser.uid.slice(0, 6).toUpperCase()}`;
-          const initialUserCard: SmartCard = {
-            ...DEMO_CARD_DATA,
-            cardId: customId,
-            medical: {
-              ...DEMO_CARD_DATA.medical,
-              fullName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kart Sahibi',
-            },
-            personal: {
-              ...DEMO_CARD_DATA.personal,
-              fullName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kart Sahibi',
-              email: currentUser.email || '',
-            },
-            vehicle: DEMO_CARD_DATA.vehicle
-          };
-          await saveCardToFirestore(initialUserCard, currentUser.uid);
-          setCard(initialUserCard);
-          saveStoredCardData(initialUserCard);
-        }
+      // Load user's own card if available
+      const userCard = await fetchUserCard(currentUser.uid);
+      if (userCard) {
+        setCard(userCard);
+        saveStoredCardData(userCard);
       } else {
-        // When not logged in and no ?id in URL, reset to safe demo
-        const params = new URLSearchParams(window.location.search);
-        if (!params.get('id') && navigator.onLine) {
-          setCard(DEMO_CARD_DATA);
-        }
+        // Initialize user's card if none exists
+        const customId = `CARD-${currentUser.uid.slice(0, 6).toUpperCase()}`;
+        const initialUserCard: SmartCard = {
+          ...DEMO_CARD_DATA,
+          cardId: customId,
+          medical: {
+            ...DEMO_CARD_DATA.medical,
+            fullName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kart Sahibi',
+          },
+          personal: {
+            ...DEMO_CARD_DATA.personal,
+            fullName: currentUser.displayName || currentUser.email?.split('@')[0] || 'Kart Sahibi',
+            email: currentUser.email || '',
+          },
+          vehicle: DEMO_CARD_DATA.vehicle
+        };
+        await saveCardToFirestore(initialUserCard, currentUser.uid);
+        setCard(initialUserCard);
+        saveStoredCardData(initialUserCard);
       }
+    } else {
+      // Kullanıcı giriş yapmamışsa veya sadece admin panelinde oturum açmışsa müşteri arayüzü tertemiz demo kalır
+      setUser(null);
+      const params = new URLSearchParams(window.location.search);
+      if (!params.get('id') && navigator.onLine) {
+        setCard(DEMO_CARD_DATA);
+      }
+    }
+  };
+
+  // Track Firebase Auth State & Bind User Cards with Local Cache Persistence (Strict Customer Isolation)
+  useEffect(() => {
+    const unsubscribe = subscribeToAuth((currentUser) => {
+      syncCustomerUser(currentUser);
     });
     return () => unsubscribe();
   }, []);
@@ -133,19 +149,21 @@ export function App() {
     } else if (view === 'vehicle') {
       setActiveTab('vehicle');
       setIsPublicScan(true);
+    } else if (view === 'admin') {
+      setActiveTab('admin');
+      setIsPublicScan(false);
     }
 
     if (id) {
+      // SECURITY: When scanning a public card, do NOT persist to visitor's localStorage!
       fetchCardFromFirestore(id).then((loadedCard) => {
         if (loadedCard) {
           setCard(loadedCard);
-          saveStoredCardData(loadedCard);
         }
       });
 
       const unsubscribeCard = listenToCardUpdates(id, (updatedCard) => {
         setCard(updatedCard);
-        saveStoredCardData(updatedCard);
       });
 
       return () => {
@@ -192,9 +210,11 @@ export function App() {
   };
 
   const handleLogout = async () => {
+    clearCustomerSession();
     await logoutUser();
     clearStoredCardData();
     setCard(DEMO_CARD_DATA);
+    setUser(null);
     setActiveTab('home');
     setIsPublicScan(false);
     setIsDrawerOpen(false);
@@ -252,6 +272,11 @@ export function App() {
   const isDark = theme === 'dark';
   const userName = user?.displayName || user?.email?.split('@')[0] || (language === 'tr' ? 'Kullanıcı' : 'User');
 
+  // STANDALONE ENTERPRISE ADMIN PORTAL (ISOLATED FROM CUSTOMER SITE)
+  if (activeTab === 'admin') {
+    return <AdminDashboardContainer />;
+  }
+
   return (
     <div className={`min-h-screen ${isDark ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'} flex flex-col font-sans transition-colors duration-200 relative`}>
       
@@ -272,17 +297,17 @@ export function App() {
             onClick={() => { setIsPublicScan(false); setActiveTab('home'); }}
             className="flex items-center gap-3 cursor-pointer select-none group shrink-0"
           >
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-[#14798D] via-[#509BEC] to-[#D1C8B9] flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
-              <ShieldAlert className="w-5 h-5 text-white drop-shadow" />
+            <div className="w-10 h-10 rounded-full bg-black border-2 border-white flex items-center justify-center text-white font-black text-xs tracking-tight shadow-md group-hover:scale-105 transition-transform shrink-0">
+              H***F
             </div>
             <div>
               <div className="text-base font-black tracking-tight flex items-center gap-2">
                 <span className={isDark ? 'text-white' : 'text-slate-900'}>{t.appName}</span>
-                <span className="text-[10px] bg-[#14798D]/20 text-[#14798D] dark:text-[#509BEC] border border-[#14798D]/40 px-1.5 py-0.5 rounded font-mono font-bold">
+                <span className="text-[10px] bg-neutral-800 text-neutral-200 border border-neutral-700 px-1.5 py-0.5 rounded font-mono font-bold">
                   {t.versionBadge}
                 </span>
               </div>
-              <div className={`text-xs ${isDark ? 'text-[#D1C8B9]' : 'text-slate-500'} font-medium`}>
+              <div className={`text-xs ${isDark ? 'text-neutral-400' : 'text-slate-500'} font-medium`}>
                 {t.appSubtitle}
               </div>
             </div>
@@ -821,10 +846,14 @@ export function App() {
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={() => {
+        onSuccess={async (loggedInUser) => {
           setIsAuthModalOpen(false);
           setIsPublicScan(false);
           setActiveTab('home');
+          const targetUser = loggedInUser || auth.currentUser;
+          if (targetUser) {
+            await syncCustomerUser(targetUser);
+          }
         }}
         lang={language}
         theme={theme}

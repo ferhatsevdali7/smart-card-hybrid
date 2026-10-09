@@ -10,12 +10,13 @@ import {
   resetPassword, 
   getAuthErrorMessage 
 } from '../lib/authService';
+import { markCustomerLoggedIn } from '../lib/customerSessionService';
 import { Language, ThemeMode } from '../lib/i18n';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (user?: any) => void;
   lang?: Language;
   theme?: ThemeMode;
 }
@@ -49,8 +50,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     resetFormState();
     try {
-      await loginWithGoogle();
-      onSuccess();
+      const user = await loginWithGoogle();
+      markCustomerLoggedIn();
+      onSuccess(user || null);
       onClose();
     } catch (err: any) {
       setError(getAuthErrorMessage(err, lang));
@@ -99,12 +101,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
     setLoading(true);
     try {
+      let loggedUser = null;
       if (mode === 'login') {
-        await loginWithEmail(email, password);
+        loggedUser = await loginWithEmail(email, password);
       } else {
-        await registerWithEmail(email, password);
+        loggedUser = await registerWithEmail(email, password);
       }
-      onSuccess();
+      markCustomerLoggedIn();
+      onSuccess(loggedUser || null);
       onClose();
     } catch (err: any) {
       setError(getAuthErrorMessage(err, lang));
@@ -126,8 +130,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
         {/* Modal Header */}
         <div className="text-center space-y-1.5 pt-2">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-[#14798D]/20 text-[#509BEC] flex items-center justify-center border border-[#14798D]/30 shadow-md">
-            <Lock className="w-6 h-6 text-[#14798D] dark:text-[#509BEC]" />
+          <div className="w-12 h-12 mx-auto rounded-full bg-black border-2 border-white flex items-center justify-center text-white font-black text-xs tracking-tight shadow-md">
+            H***F
           </div>
           <h2 className="text-lg font-black tracking-tight">
             {mode === 'forgot'

@@ -1,16 +1,16 @@
-{
-  "name": "Hibrit Akıllı Kart",
-  "short_name": "Akıllı Kart",
+﻿{
+  "name": "H***F Hibrit Akıllı Kart",
+  "short_name": "H***F",
   "description": "Acil Medikal Sağlık Profili, Güvenli Sosyal Kartvizit ve Dijital Araç Kartı",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#020617",
-  "theme_color": "#14798D",
+  "background_color": "#090B0E",
+  "theme_color": "#000000",
   "orientation": "portrait-primary",
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "/hf_icon_v3.svg",
       "sizes": "192x192 512x512",
       "type": "image/svg+xml",
       "purpose": "any maskable"
@@ -22,21 +22,21 @@
       "short_name": "Sağlık",
       "description": "Acil Durum Sağlık ve Kan Grubu Profili",
       "url": "/?view=sos",
-      "icons": [{ "src": "/favicon.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/hf_icon_v3.svg", "sizes": "192x192" }]
     },
     {
       "name": "Sosyal Kartvizit",
       "short_name": "Kartvizit",
       "description": "Dijital Kartvizit ve IBAN Paylaşımı",
       "url": "/?view=personal",
-      "icons": [{ "src": "/favicon.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/hf_icon_v3.svg", "sizes": "192x192" }]
     },
     {
-      "name": "Araç Kartı",
+      "name": "Araç Bildirim",
       "short_name": "Araç",
-      "description": "Araç Plaka ve Park İletişimi",
+      "description": "Araç Sahibi İletişim ve Park Notu",
       "url": "/?view=vehicle",
-      "icons": [{ "src": "/favicon.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/hf_icon_v3.svg", "sizes": "192x192" }]
     }
   ]
 }

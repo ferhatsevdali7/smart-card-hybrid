@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { 
-  CarFront, Phone, AlertTriangle, ShieldCheck, 
-  MessageSquare, Clock, Copy, Check, Edit3, X, Save,
-  QrCode, Printer
+  CarFront, Phone, ShieldCheck, 
+  MessageSquare, Copy, Check, Save,
+  QrCode, Printer, Lock, Eye, Shield,
+  Lightbulb, AlertOctagon, Compass, CheckCircle2,
+  Smartphone, X, Wifi, Battery
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { VehicleInfo } from '../types/card';
@@ -25,13 +27,84 @@ const DEFAULT_VEHICLE: VehicleInfo = {
   plateNumber: '34 ABC 789',
   brandModel: 'Hibrit Akıllı Araç',
   ownerName: 'Kart Sahibi',
-  ownerPhone: '+90 5XX XXX XX XX',
-  emergencyContact: '+90 5XX XXX XX XX',
-  parkingNote: 'Aracım hatalı park durumundaysa veya acil bir durum varsa lütfen hemen aşağıdaki butondan beni arayın.',
-  insuranceStatus: 'Aktif Kasko & Trafik Sigortası'
+  ownerPhone: '+90 532 000 00 00',
+  emergencyContact: '+90 532 000 00 00',
+  parkingNote: 'Aracım hatalı park durumundaysa veya acil bir durum varsa lütfen bildirin.',
+  insuranceStatus: 'Aktif Kasko & Trafik Sigortası',
+  hidePhone: true,
+  allowDirectCall: false, // Default to ultra safe mode
+  allowWhatsApp: true
 };
 
 export type SubTab = 'details' | 'qr';
+
+interface QuickNoticeOption {
+  id: string;
+  labelTr: string;
+  labelEn: string;
+  messageTr: string;
+  messageEn: string;
+  icon: React.ReactNode;
+}
+
+const QUICK_NOTICES: QuickNoticeOption[] = [
+  {
+    id: 'blocking',
+    icon: <CarFront className="w-4 h-4 text-amber-500" />,
+    labelTr: 'Yolu Kapatıyor',
+    labelEn: 'Blocking Road',
+    messageTr: 'Merhaba, {PLATE} plakalı aracınız çıkışımı engelliyor. Müsait olduğunuzda rica etsem çekebilir misiniz?',
+    messageEn: 'Hello, your vehicle {PLATE} is blocking my exit. Could you please move it when possible?'
+  },
+  {
+    id: 'lights',
+    icon: <Lightbulb className="w-4 h-4 text-amber-500" />,
+    labelTr: 'Farlar Açık',
+    labelEn: 'Lights On',
+    messageTr: 'Merhaba, {PLATE} plakalı aracınızın farları açık kalmış. Akünüzün bitmemesi için haber vermek istedim.',
+    messageEn: 'Hello, your vehicle {PLATE} has its lights left on.'
+  },
+  {
+    id: 'window',
+    icon: <Compass className="w-4 h-4 text-amber-500" />,
+    labelTr: 'Cam / Kapı Açık',
+    labelEn: 'Window / Door Open',
+    messageTr: 'Merhaba, {PLATE} plakalı aracınızın camı veya kapısı açık kalmış görünüyor.',
+    messageEn: 'Hello, your vehicle {PLATE} appears to have an open window or door.'
+  },
+  {
+    id: 'alarm_accident',
+    icon: <AlertOctagon className="w-4 h-4 text-rose-500" />,
+    labelTr: 'Alarm / Temas',
+    labelEn: 'Alarm / Impact',
+    messageTr: 'Merhaba, {PLATE} plakalı aracınızın alarmı çalıyor veya bir temas durumu oldu, kontrol etmeniz rica olunur.',
+    messageEn: 'Hello, your vehicle {PLATE} alarm was triggered or had an impact.'
+  }
+];
+
+// Helper to auto format Turkish License Plate
+const formatTurkishPlate = (input: string) => {
+  const clean = input.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (clean.length <= 2) return clean;
+  
+  // Extract province code (first 2 digits)
+  const province = clean.slice(0, 2);
+  const rest = clean.slice(2);
+  
+  // Extract letters
+  const lettersMatch = rest.match(/^[A-Z]+/);
+  if (!lettersMatch) return `${province} ${rest}`;
+  
+  const letters = lettersMatch[0].slice(0, 3);
+  const digits = rest.slice(letters.length).replace(/[^0-9]/g, '').slice(0, 4);
+  
+  if (digits) {
+    return `${province} ${letters} ${digits}`;
+  } else if (letters) {
+    return `${province} ${letters}`;
+  }
+  return province;
+};
 
 export const VehicleCardView: React.FC<VehicleCardViewProps> = ({
   cardId = 'DEMO-749123',
@@ -61,17 +134,40 @@ export const VehicleCardView: React.FC<VehicleCardViewProps> = ({
       onSubTabChange(tab);
     }
   };
-  const [copied, setCopied] = useState(false);
+
+  // Form State for Owner Editing
+  const [formData, setFormData] = useState<VehicleInfo>({
+    hidePhone: true,
+    allowDirectCall: false,
+    allowWhatsApp: true,
+    ...vehicle
+  });
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [showPhoneSimulator, setShowPhoneSimulator] = useState(false);
+
+  // Visitor Quick Notice Selection
+  const [selectedNotice, setSelectedNotice] = useState<string>('blocking');
+  const [customNote, setCustomNote] = useState<string>('');
   const [copiedLink, setCopiedLink] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState<VehicleInfo>(vehicle);
+
+  React.useEffect(() => {
+    setFormData({
+      hidePhone: true,
+      allowDirectCall: false,
+      allowWhatsApp: true,
+      ...vehicle
+    });
+  }, [vehicle]);
 
   const vehicleUrl = `${window.location.origin}?view=vehicle&id=${cardId}`;
 
-  const handleCopyPhone = () => {
-    navigator.clipboard.writeText(vehicle.ownerPhone);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdateVehicle) {
+      onUpdateVehicle(formData);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    }
   };
 
   const handleCopyLink = () => {
@@ -80,314 +176,542 @@ export const VehicleCardView: React.FC<VehicleCardViewProps> = ({
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
-  const handleSaveEdit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (onUpdateVehicle) {
-      onUpdateVehicle(editForm);
-    }
-    setIsEditing(false);
+  // Dedicated clean print trigger
+  const handlePrintDecal = () => {
+    window.print();
   };
 
-  return (
-    <div className="max-w-2xl mx-auto p-4 sm:p-6 space-y-4 pb-24">
-      
-      {/* Responsive Sub-Tabs Navigation */}
-      <div className={`flex p-1.5 rounded-2xl border ${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} gap-1 text-xs font-bold`}>
-        <button
-          onClick={() => handleSelectSubTab('details')}
-          className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
-            activeSubTab === 'details'
-              ? 'bg-amber-600 text-white shadow-md'
-              : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <CarFront className="w-4 h-4" />
-          <span>{lang === 'tr' ? 'araç kartı bilgileri/ düzele' : 'Vehicle Card Info / Edit'}</span>
-        </button>
+  // Build visitor message
+  const currentNoticeObj = QUICK_NOTICES.find(n => n.id === selectedNotice) || QUICK_NOTICES[0];
+  const activeTemplate = lang === 'tr' ? currentNoticeObj.messageTr : currentNoticeObj.messageEn;
+  const resolvedTemplate = activeTemplate.replace('{PLATE}', (isOwner ? formData.plateNumber : vehicle.plateNumber) || 'Araç');
+  const finalMessage = customNote.trim() ? `${resolvedTemplate}\n\nNot: ${customNote.trim()}` : resolvedTemplate;
+  const targetPhone = isOwner ? formData.ownerPhone : vehicle.ownerPhone;
+  const rawPhoneDigits = (targetPhone || '').replace(/[^0-9]/g, '');
+  const whatsAppUrl = `https://wa.me/${rawPhoneDigits}?text=${encodeURIComponent(finalMessage)}`;
 
-        <button
-          onClick={() => handleSelectSubTab('qr')}
-          className={`flex-1 py-2.5 px-3 rounded-xl flex items-center justify-center gap-2 transition-all ${
-            activeSubTab === 'qr'
-              ? 'bg-amber-600 text-white shadow-md'
-              : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <QrCode className="w-4 h-4" />
-          <span>{lang === 'tr' ? 'araç kart QR' : 'Vehicle Card QR'}</span>
-        </button>
-      </div>
+  // COMPONENT: VISITOR VIEW CONTENT (Shared between Public Scan and Phone Simulator)
+  const VisitorExperience = ({ isInsideSimulator = false }: { isInsideSimulator?: boolean }) => {
+    const currentVehicle = isInsideSimulator ? formData : vehicle;
+    return (
+      <div className={`space-y-4 text-center ${isInsideSimulator ? 'p-4 text-slate-900' : 'max-w-md mx-auto pt-2'}`}>
+        
+        {/* Protected Badge */}
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+          <Shield className="w-3 h-3" />
+          <span>{lang === 'tr' ? 'Gizli & Korumalı Sürücü Hattı' : 'Encrypted Driver Contact'}</span>
+        </div>
 
-      {/* ----------------- SUB-TAB 1: VEHICLE CARD DETAILS & EDIT ----------------- */}
-      {activeSubTab === 'details' && (
-        <div className="space-y-4">
-          {/* Owner Quick Edit Action Bar */}
-          {isOwner && onUpdateVehicle && (
-            <div className="flex items-center justify-between bg-amber-500/15 border border-amber-500/30 p-3 rounded-2xl">
-              <div className="flex items-center gap-2 text-xs font-bold text-amber-400">
-                <ShieldCheck className="w-4 h-4" />
-                <span>{lang === 'tr' ? 'Araç Kartı Sahibi Modu' : 'Vehicle Card Owner Mode'}</span>
-              </div>
-              <button
-                onClick={() => { setEditForm(vehicle); setIsEditing(true); }}
-                className="bg-amber-600 hover:bg-amber-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-md active:scale-98 transition-all"
-              >
-                <Edit3 className="w-3.5 h-3.5" />
-                <span>{lang === 'tr' ? 'Aracı Düzenle' : 'Edit Vehicle'}</span>
-              </button>
+        {/* Turkish License Plate Badge */}
+        <div className="pt-1">
+          <div className="inline-flex items-center bg-white text-slate-950 rounded-xl px-5 py-2 shadow-lg border-2 border-slate-900 select-none">
+            <div className="bg-[#003399] text-white text-[9px] font-bold px-1.5 py-1 rounded flex flex-col items-center justify-center leading-none mr-2.5 select-none">
+              <span className="opacity-70 text-[6px]">★</span>
+              <span>TR</span>
             </div>
-          )}
-
-          {/* Top Status Header */}
-          <div className={`${isDark ? 'bg-amber-950/30 border-amber-800/50 text-amber-200' : 'bg-amber-50 border-amber-200 text-amber-900'} border rounded-2xl p-4 flex items-center justify-between gap-3 shadow-sm`}>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
-                <CarFront className="w-6 h-6" />
-              </div>
-              <div>
-                <div className="text-xs uppercase tracking-wider font-mono font-bold text-amber-400">
-                  {lang === 'tr' ? 'Dijital Araç Kartı & Park Bildirimi' : 'Digital Vehicle Card & Parking ID'}
-                </div>
-                <div className="text-sm font-bold">
-                  {lang === 'tr' ? 'Araç Sahibi İletişim ve Acil Durum Profili' : 'Vehicle Owner Contact & Emergency Profile'}
-                </div>
-              </div>
-            </div>
-            <div className="hidden sm:flex items-center gap-1.5 bg-amber-500/20 px-2.5 py-1 rounded-lg text-xs font-mono font-bold text-amber-300">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              <span>{cardId}</span>
-            </div>
+            <span className="font-mono tracking-wider font-black text-xl sm:text-2xl uppercase text-slate-950">
+              {currentVehicle.plateNumber || '34 ABC 789'}
+            </span>
           </div>
-
-          {/* Main Vehicle Plate Badge */}
-          <div className={`${isDark ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200 shadow-xl'} border rounded-3xl p-6 sm:p-8 space-y-6 text-center relative overflow-hidden`}>
-            <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600"></div>
-
-            {/* Turkish License Plate Realistic Badge */}
-            <div className="inline-flex items-center border-4 border-slate-900 bg-white text-slate-900 rounded-2xl px-6 py-3 shadow-2xl font-mono tracking-widest font-black text-2xl sm:text-4xl gap-4 select-none">
-              <div className="bg-blue-700 text-white text-xs px-2 py-1.5 rounded flex flex-col items-center justify-center font-bold -ml-3">
-                <span>TR</span>
-              </div>
-              <span className="text-slate-950 uppercase">{vehicle.plateNumber}</span>
-            </div>
-
-            <div className="space-y-1">
-              <h2 className="text-lg font-bold">{vehicle.brandModel}</h2>
-              <p className="text-xs text-slate-400">{lang === 'tr' ? 'Kayıtlı Araç Sahibi:' : 'Registered Owner:'} <span className={`font-semibold ${isDark ? 'text-white' : 'text-slate-900'}`}>{vehicle.ownerName}</span></p>
-            </div>
-
-            {/* Quick Driver Action Buttons */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
-              <a
-                href={`tel:${vehicle.ownerPhone}`}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-98 transition-all"
-              >
-                <Phone className="w-5 h-5" />
-                <span>{lang === 'tr' ? 'Araç Sahibini Ara' : 'Call Vehicle Owner'}</span>
-              </a>
-
-              <a
-                href={`https://wa.me/${vehicle.ownerPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent('Merhaba, ' + vehicle.plateNumber + ' plakalı aracınız hakkında size ulaşıyorum.')}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold py-3.5 px-4 rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20 active:scale-98 transition-all"
-              >
-                <MessageSquare className="w-5 h-5" />
-                <span>{lang === 'tr' ? 'WhatsApp Mesaj Gönder' : 'Send WhatsApp Message'}</span>
-              </a>
-            </div>
-          </div>
-
-          {/* Driver / Parking Message Card */}
-          <div className={`${isDark ? 'bg-slate-900/80 border-slate-800' : 'bg-white border-slate-200 shadow-md'} border rounded-3xl p-6 space-y-4`}>
-            <div className="flex items-center gap-2 text-sm font-bold text-amber-400">
-              <AlertTriangle className="w-4 h-4" />
-              <span>{lang === 'tr' ? 'Sürücü / Park Notu' : 'Driver / Parking Notice'}</span>
-            </div>
-            <p className={`text-xs sm:text-sm ${isDark ? 'text-slate-300' : 'text-slate-700'} leading-relaxed ${isDark ? 'bg-slate-950/40 border-slate-800/60' : 'bg-slate-50 border-slate-200'} p-4 rounded-2xl border`}>
-              "{vehicle.parkingNote}"
-            </p>
-
-            <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-400">
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3.5 h-3.5 text-amber-400" />
-                <span>{lang === 'tr' ? '7/24 Aktif İletişim Hattı' : '24/7 Active Contact'}</span>
-              </div>
-              <button
-                onClick={handleCopyPhone}
-                className="inline-flex items-center gap-1 text-xs text-[#509BEC] hover:underline"
-              >
-                {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                <span>{copied ? (lang === 'tr' ? 'Kopyalandı' : 'Copied') : (lang === 'tr' ? 'Numarayı Kopyala' : 'Copy Number')}</span>
-              </button>
-            </div>
+          <div className="text-[11px] text-slate-500 font-medium mt-1">
+            {currentVehicle.brandModel || 'Araç Sahibi'}
           </div>
         </div>
-      )}
 
-      {/* ----------------- SUB-TAB 2: VEHICLE CARD QR ----------------- */}
-      {activeSubTab === 'qr' && (
-        <div className={`${isDark ? 'bg-slate-900/90 border-slate-800' : 'bg-white border-slate-200 shadow-sm'} border rounded-3xl p-6 space-y-6 text-center transition-colors`}>
-          <div>
-            <h2 className="text-base font-bold flex items-center justify-center gap-2">
-              <QrCode className="w-5 h-5 text-amber-400" />
-              <span>{lang === 'tr' ? 'Araç Camı / Konsol QR Kodu' : 'Windshield & Dash Vehicle QR'}</span>
+        {/* Driver Parking Note */}
+        {currentVehicle.parkingNote && (
+          <div className="p-3 rounded-2xl text-[11px] leading-relaxed bg-slate-100/90 border border-slate-200 text-slate-700 text-left">
+            <div className="text-[9px] font-bold uppercase tracking-wider text-amber-600 mb-0.5">
+              {lang === 'tr' ? 'Sürücü Notu' : 'Driver Note'}
+            </div>
+            "{currentVehicle.parkingNote}"
+          </div>
+        )}
+
+        {/* Quick Notice Selection */}
+        <div className="space-y-2 text-left">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+            {lang === 'tr' ? 'Hızlı Durum Seçin' : 'Select Quick Status'}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {QUICK_NOTICES.map((notice) => {
+              const isSelected = selectedNotice === notice.id;
+              return (
+                <button
+                  key={notice.id}
+                  type="button"
+                  onClick={() => setSelectedNotice(notice.id)}
+                  className={`p-2.5 rounded-xl text-left transition-all border flex flex-col justify-between gap-1.5 ${
+                    isSelected
+                      ? 'bg-amber-50 border-amber-500 text-slate-950 shadow-sm'
+                      : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    {notice.icon}
+                    <div className={`w-1.5 h-1.5 rounded-full ${isSelected ? 'bg-amber-500' : 'bg-transparent'}`} />
+                  </div>
+                  <div className="text-[11px] font-bold">
+                    {lang === 'tr' ? notice.labelTr : notice.labelEn}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Optional Note */}
+          <input
+            type="text"
+            value={customNote}
+            onChange={(e) => setCustomNote(e.target.value)}
+            placeholder={lang === 'tr' ? 'İsteğe bağlı ek not...' : 'Optional note...'}
+            className="w-full px-3 py-2 rounded-xl text-[11px] outline-none border bg-white border-slate-200 text-slate-900 placeholder-slate-400 focus:border-amber-500"
+          />
+        </div>
+
+        {/* Real Functioning Actions (Works in Simulator as well) */}
+        <div className="space-y-2 pt-1">
+          {currentVehicle.allowWhatsApp !== false && (
+            <a
+              href={whatsAppUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full py-3 px-4 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md shadow-emerald-600/20 active:scale-98 transition-all cursor-pointer"
+            >
+              <MessageSquare className="w-4 h-4 fill-current" />
+              <span>{lang === 'tr' ? 'Sürücüye WhatsApp ile Bildir' : 'Send WhatsApp Notice'}</span>
+            </a>
+          )}
+
+          {currentVehicle.allowDirectCall && (
+            <a
+              href={`tel:${currentVehicle.ownerPhone}`}
+              className="w-full py-2.5 px-4 rounded-xl font-semibold text-[11px] flex items-center justify-center gap-1.5 border bg-white hover:bg-slate-50 border-slate-200 text-slate-800 shadow-sm transition-all cursor-pointer"
+            >
+              <Phone className="w-3.5 h-3.5 text-emerald-500" />
+              <span>{lang === 'tr' ? 'Arama Başlat (GSM)' : 'Direct Call'}</span>
+            </a>
+          )}
+        </div>
+
+      </div>
+    );
+  };
+
+  // IF PUBLIC SCAN FROM STRANGER'S PHONE
+  if (isPublicScan && !isOwner) {
+    return (
+      <div className="max-w-md mx-auto px-4 pb-24 pt-4">
+        <VisitorExperience isInsideSimulator={false} />
+        {onOpenAuth && (
+          <div className="text-center pt-6">
+            <button
+              onClick={onOpenAuth}
+              className="text-[11px] text-slate-500 hover:text-amber-400 transition-colors"
+            >
+              {lang === 'tr' ? 'Bu aracın sahibi misiniz? Giriş yapıp yönetin' : 'Vehicle owner? Sign in to manage'}
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // OWNER DASHBOARD VIEW
+  return (
+    <div className="max-w-xl mx-auto px-3 sm:px-4 space-y-6 pb-28 pt-1">
+
+      {/* Print-Only Pure Windshield Decal Container */}
+      <div className="hidden print:block fixed inset-0 bg-white text-black p-8 z-[99999]">
+        <div className="max-w-xs mx-auto border-4 border-black p-6 rounded-3xl text-center space-y-4">
+          <div className="text-base font-black tracking-widest uppercase border-b-2 border-black pb-2">
+            AKILLI ARAÇ BİLDİRİMİ
+          </div>
+          <div className="text-xl font-mono font-black border-2 border-black py-1 px-3 rounded-lg inline-block">
+            {formData.plateNumber || '34 ABC 789'}
+          </div>
+          <div className="py-2 flex justify-center">
+            <QRCodeSVG value={vehicleUrl} size={200} level="H" includeMargin={false} />
+          </div>
+          <div className="text-xs font-bold uppercase">
+            Hatalı Park / Acil Durumda Okutunuz
+          </div>
+          <div className="text-[10px] text-gray-600">
+            Güvenli ve Gizli İletişim Hattı • smart-card-hybrid.web.app
+          </div>
+        </div>
+      </div>
+
+      {/* Floating Segmented Navigation */}
+      <div className="flex justify-center print:hidden">
+        <div className={`inline-flex p-1 rounded-full backdrop-blur-xl border transition-all ${
+          isDark 
+            ? 'bg-slate-900/60 border-slate-800/80 shadow-xl' 
+            : 'bg-white/80 border-slate-200 shadow-md'
+        }`}>
+          <button
+            onClick={() => handleSelectSubTab('details')}
+            className={`px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 flex items-center gap-2 ${
+              activeSubTab === 'details'
+                ? isDark ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-950 text-white font-bold'
+                : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-950'
+            }`}
+          >
+            <CarFront className="w-3.5 h-3.5" />
+            <span>{lang === 'tr' ? 'araç kartı bilgileri/ düzele' : 'Vehicle Info / Edit'}</span>
+          </button>
+
+          <button
+            onClick={() => handleSelectSubTab('qr')}
+            className={`px-5 py-2 rounded-full text-xs font-semibold tracking-wide transition-all duration-200 flex items-center gap-2 ${
+              activeSubTab === 'qr'
+                ? isDark ? 'bg-amber-500 text-slate-950 font-bold' : 'bg-slate-950 text-white font-bold'
+                : isDark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-950'
+            }`}
+          >
+            <QrCode className="w-3.5 h-3.5" />
+            <span>{lang === 'tr' ? 'araç kart QR' : 'Vehicle QR'}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ----------------- SUB-TAB 1: OWNER EDIT & SETTINGS FORM ----------------- */}
+      {activeSubTab === 'details' && (
+        <form onSubmit={handleSave} className="space-y-6 print:hidden">
+
+          {/* Section 1: Header */}
+          <div className="space-y-1">
+            <h2 className="text-base font-bold tracking-tight">
+              {lang === 'tr' ? 'Araç & Park İletişim Bilgileri' : 'Vehicle & Parking Profile'}
             </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              {lang === 'tr' ? 'Aracınızın ön camına veya torpidosuna yapıştırıp hatalı park ve acil bildirimleri alın' : 'Place on your windshield for parking notifications and quick contact'}
+            <p className="text-xs text-slate-400">
+              {lang === 'tr' 
+                ? 'Aracınızın camına yapıştıracağınız QR okutulduğunda kullanılacak bilgileri ve gizlilik tercihlerinizi belirleyin.' 
+                : 'Configure vehicle details and privacy settings for your windshield QR sticker.'}
             </p>
           </div>
 
-          {/* The QR Container */}
-          <div className="bg-white p-5 rounded-3xl inline-block shadow-2xl mx-auto border-4 border-amber-500/30">
-            <QRCodeSVG id="vehicle-qr" value={vehicleUrl} size={180} level="H" includeMargin />
+          {/* Plate & Model Inputs */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                {lang === 'tr' ? 'Araç Plakası' : 'License Plate'}
+              </label>
+              <input
+                type="text"
+                value={formData.plateNumber}
+                onChange={(e) => setFormData({ ...formData, plateNumber: formatTurkishPlate(e.target.value) })}
+                placeholder="34 ABC 789"
+                maxLength={11}
+                className={`w-full px-3.5 py-3 rounded-2xl border text-sm font-mono font-bold uppercase outline-none transition-all ${
+                  isDark 
+                    ? 'bg-slate-900/60 border-slate-800 text-white focus:border-amber-500/50' 
+                    : 'bg-white border-slate-200 text-slate-900 focus:border-slate-400'
+                }`}
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                {lang === 'tr' ? 'Marka & Model' : 'Brand & Model'}
+              </label>
+              <input
+                type="text"
+                value={formData.brandModel}
+                onChange={(e) => setFormData({ ...formData, brandModel: e.target.value })}
+                placeholder="Örn: BMW 320i, Renault Clio"
+                className={`w-full px-3.5 py-3 rounded-2xl border text-xs font-medium outline-none transition-all ${
+                  isDark 
+                    ? 'bg-slate-900/60 border-slate-800 text-white focus:border-amber-500/50' 
+                    : 'bg-white border-slate-200 text-slate-900 focus:border-slate-400'
+                }`}
+                required
+              />
+            </div>
           </div>
 
-          {/* Quick Summary under QR */}
+          {/* Owner Phone & Name */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                {lang === 'tr' ? 'Sürücü Adı' : 'Driver Name'}
+              </label>
+              <input
+                type="text"
+                value={formData.ownerName}
+                onChange={(e) => setFormData({ ...formData, ownerName: e.target.value })}
+                className={`w-full px-3.5 py-3 rounded-2xl border text-xs font-medium outline-none transition-all ${
+                  isDark 
+                    ? 'bg-slate-900/60 border-slate-800 text-white focus:border-amber-500/50' 
+                    : 'bg-white border-slate-200 text-slate-900 focus:border-slate-400'
+                }`}
+                required
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+                {lang === 'tr' ? 'İletişim Telefonu' : 'Contact Phone'}
+              </label>
+              <input
+                type="text"
+                value={formData.ownerPhone}
+                onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
+                placeholder="+90 532 000 00 00"
+                className={`w-full px-3.5 py-3 rounded-2xl border text-xs font-mono font-medium outline-none transition-all ${
+                  isDark 
+                    ? 'bg-slate-900/60 border-slate-800 text-white focus:border-amber-500/50' 
+                    : 'bg-white border-slate-200 text-slate-900 focus:border-slate-400'
+                }`}
+                required
+              />
+            </div>
+          </div>
+
+          {/* Privacy & Anti-Harassment Controls (Apple Settings Style List) */}
+          <div className="space-y-2">
+            <div className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              {lang === 'tr' ? 'Gizlilik ve Taciz Kalkanı' : 'Privacy & Security Filters'}
+            </div>
+
+            <div className={`rounded-2xl border divide-y overflow-hidden transition-all ${
+              isDark 
+                ? 'bg-slate-900/40 border-slate-800 divide-slate-800/60' 
+                : 'bg-white border-slate-200 divide-slate-100 shadow-sm'
+            }`}>
+              
+              {/* Toggle 1: WhatsApp Quick Notice */}
+              <label className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-500/5 transition-colors">
+                <div className="space-y-0.5 pr-4">
+                  <div className="text-xs font-semibold flex items-center gap-1.5 text-emerald-500">
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    <span>{lang === 'tr' ? 'WhatsApp Hızlı Durum Butonları (Önerilen)' : 'WhatsApp Quick Notices (Recommended)'}</span>
+                  </div>
+                  <div className="text-[11px] text-slate-400 leading-relaxed">
+                    {lang === 'tr' 
+                      ? 'Karşı taraf tek tıkla hazır şablon mesaj atar. Numaranızı açıkça arama ekranında ele geçiremez.' 
+                      : 'Send 1-tap quick status message without exposing your phone to their dialer.'}
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={formData.allowWhatsApp !== false}
+                  onChange={(e) => setFormData({ ...formData, allowWhatsApp: e.target.checked })}
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                />
+              </label>
+
+              {/* Toggle 2: Direct Call (GSM Warning) */}
+              <label className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-500/5 transition-colors">
+                <div className="space-y-0.5 pr-4">
+                  <div className="text-xs font-semibold flex items-center gap-1.5">
+                    <Phone className="w-3.5 h-3.5 text-amber-500" />
+                    <span>{lang === 'tr' ? 'Doğrudan GSM Aramasına İzin Ver' : 'Allow Direct GSM Calling'}</span>
+                  </div>
+                  <div className="text-[11px] text-amber-500/80 leading-relaxed">
+                    {lang === 'tr' 
+                      ? '⚠️ Dikkat: Açıldığında arayan kişinin telefon arama ekranında numaranız açıkça görünecektir.' 
+                      : '⚠️ Warning: When enabled, your phone number will be displayed on caller dialer screen.'}
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={formData.allowDirectCall === true}
+                  onChange={(e) => setFormData({ ...formData, allowDirectCall: e.target.checked })}
+                  className="w-4 h-4 accent-amber-500 rounded cursor-pointer"
+                />
+              </label>
+
+            </div>
+          </div>
+
+          {/* Driver Custom Parking Note */}
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
+              {lang === 'tr' ? 'Varsayılan Park & Sürücü Notu' : 'Default Parking Note'}
+            </label>
+            <textarea
+              value={formData.parkingNote}
+              onChange={(e) => setFormData({ ...formData, parkingNote: e.target.value })}
+              rows={2}
+              placeholder={lang === 'tr' ? 'Örn: Hatalı park durumunda lütfen bildirin, hemen geliyorum.' : 'Please notify if parked inappropriately...'}
+              className={`w-full px-3.5 py-3 rounded-2xl border text-xs outline-none leading-relaxed transition-all ${
+                isDark 
+                  ? 'bg-slate-900/60 border-slate-800 text-white focus:border-amber-500/50' 
+                  : 'bg-white border-slate-200 text-slate-900 focus:border-slate-400'
+              }`}
+            />
+          </div>
+
+          {/* Action Row: Live Simulator & Save */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowPhoneSimulator(true)}
+              className={`flex-1 py-3.5 px-4 rounded-2xl border font-semibold text-xs flex items-center justify-center gap-2 transition-all ${
+                isDark 
+                  ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-300' 
+                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 shadow-sm'
+              }`}
+            >
+              <Smartphone className="w-4 h-4 text-amber-500" />
+              <span>{lang === 'tr' ? 'Telefon Simülatöründe Gör' : 'Preview in Phone Simulator'}</span>
+            </button>
+
+            <button
+              type="submit"
+              className="flex-1 py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-98 transition-all"
+            >
+              {saveSuccess ? <CheckCircle2 className="w-4 h-4 text-slate-950" /> : <Save className="w-4 h-4" />}
+              <span>{saveSuccess ? (lang === 'tr' ? 'Kaydedildi!' : 'Saved!') : (lang === 'tr' ? 'Değişiklikleri Kaydet' : 'Save Changes')}</span>
+            </button>
+          </div>
+
+        </form>
+      )}
+
+      {/* ----------------- SUB-TAB 2: WINDSHIELD QR STICKER ----------------- */}
+      {activeSubTab === 'qr' && (
+        <div className="space-y-6 text-center print:hidden">
+
           <div className="space-y-1">
-            <div className="text-sm font-bold uppercase tracking-wider font-mono">{vehicle.plateNumber}</div>
-            <div className="text-xs font-mono font-bold text-amber-500">
-              {vehicle.brandModel} • {vehicle.ownerName}
-            </div>
-            <div className="text-[11px] text-slate-400 font-mono break-all pt-1 max-w-sm mx-auto">
-              {vehicleUrl}
+            <h2 className="text-base font-bold">{lang === 'tr' ? 'Araç Ön Camı & Torpido QR Etiketi' : 'Windshield Smart QR Sticker'}</h2>
+            <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              {lang === 'tr' 
+                ? 'Aracınızın camına yapıştırın. Numaranızı açıkça yazmadan acil bildirimleri güvenle alın.' 
+                : 'Print and place on your windshield. Receive instant notices without exposing your private phone number.'}
+            </p>
+          </div>
+
+          {/* Modern Windshield Decal Preview */}
+          <div className="inline-block relative">
+            <div className={`p-6 sm:p-7 rounded-3xl border text-center space-y-4 max-w-xs mx-auto shadow-2xl ${
+              isDark 
+                ? 'bg-gradient-to-b from-slate-900 to-slate-950 border-slate-800 text-white' 
+                : 'bg-white border-slate-200 text-slate-900'
+            }`}>
+              
+              {/* Sticker Header */}
+              <div className="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-black tracking-wider text-amber-500 uppercase">
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>AKILLI ARAÇ</span>
+                </div>
+                <span className="text-[10px] font-mono uppercase bg-slate-800 text-slate-300 px-2 py-0.5 rounded-full font-bold">
+                  {formData.plateNumber || '34 ABC 789'}
+                </span>
+              </div>
+
+              {/* QR Render */}
+              <div className="bg-white p-3.5 rounded-2xl inline-block shadow-inner mx-auto">
+                <QRCodeSVG 
+                  id="vehicle-qr" 
+                  value={vehicleUrl} 
+                  size={160} 
+                  level="H" 
+                  includeMargin={false}
+                />
+              </div>
+
+              {/* Footer Instruction */}
+              <div className="space-y-0.5 pt-1">
+                <div className="text-xs font-black uppercase tracking-wider text-amber-500">
+                  {lang === 'tr' ? 'Hatalı Park & Acil Bildirim' : 'Parking & Urgent Notice'}
+                </div>
+                <div className="text-[10px] text-slate-400 font-medium">
+                  {lang === 'tr' ? 'Kameranız ile QR kodu okutunuz' : 'Scan QR code with your camera'}
+                </div>
+                <div className="pt-2 flex items-center justify-center gap-1 text-[9px] text-slate-500 font-mono">
+                  <Lock className="w-3 h-3 text-emerald-500" />
+                  <span>{lang === 'tr' ? 'Gizli & Maskelenmiş İletişim' : 'Protected Channel'}</span>
+                </div>
+              </div>
+
             </div>
           </div>
 
-          {/* Actions: Copy Link & Print */}
-          <div className="flex flex-col sm:flex-row gap-2.5 pt-2">
+          {/* Action Row */}
+          <div className="flex flex-col sm:flex-row gap-2.5 max-w-sm mx-auto pt-2">
             <button
               onClick={handleCopyLink}
-              className={`flex-1 py-3 px-4 rounded-xl border font-bold text-xs flex items-center justify-center gap-2 transition-all ${
+              className={`flex-1 py-3 px-4 rounded-2xl border font-semibold text-xs flex items-center justify-center gap-2 transition-all ${
                 copiedLink 
                   ? 'bg-emerald-600 text-white border-emerald-500' 
-                  : isDark ? 'bg-slate-950 hover:bg-slate-800 border-slate-800 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
+                  : isDark ? 'bg-slate-900 hover:bg-slate-800 border-slate-800 text-slate-200' : 'bg-slate-100 hover:bg-slate-200 border-slate-200 text-slate-800'
               }`}
             >
               {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              <span>{copiedLink ? (lang === 'tr' ? 'Bağlantı Kopyalandı!' : 'Link Copied!') : (lang === 'tr' ? 'Araç Profil Linkini Kopyala' : 'Copy Vehicle Link')}</span>
+              <span>{copiedLink ? (lang === 'tr' ? 'Kopyalandı!' : 'Copied!') : (lang === 'tr' ? 'Linki Kopyala' : 'Copy Link')}</span>
             </button>
 
             <button
-              onClick={() => window.print()}
-              className="flex-1 py-3 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-md transition-all"
+              onClick={handlePrintDecal}
+              className="flex-1 py-3 px-4 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-amber-500/20 active:scale-98 transition-all"
             >
               <Printer className="w-4 h-4" />
-              <span>{lang === 'tr' ? 'Cam Etiketini Yazdır / PDF' : 'Print Sticker / PDF'}</span>
+              <span>{lang === 'tr' ? 'Cam Etiketi Yazdır' : 'Print Sticker'}</span>
             </button>
           </div>
+
         </div>
       )}
 
-      {/* Footer Info / Edit CTA for Card Owner */}
-      {isPublicScan && onOpenAuth && (
-        <div className="text-center pt-4">
-          <button
-            onClick={onOpenAuth}
-            className="text-xs text-slate-400 hover:text-white underline transition-colors"
-          >
-            {lang === 'tr' ? 'Araç sahibi misiniz? Giriş yapıp araç bilgilerinizi düzenleyin' : 'Are you the vehicle owner? Sign in to edit'}
-          </button>
-        </div>
-      )}
-
-      {/* In-Page Vehicle Edit Modal */}
-      {isEditing && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div onClick={() => setIsEditing(false)} className="fixed inset-0 bg-black/65 backdrop-blur-sm" />
-          <div className={`relative w-full max-w-lg ${isDark ? 'bg-slate-900 border-slate-800 text-white' : 'bg-white border-slate-200 text-slate-900'} border rounded-3xl p-6 shadow-2xl z-10 space-y-4 max-h-[90vh] overflow-y-auto`}>
+      {/* ----------------- REALISTIC MOBILE PHONE SIMULATOR MODAL ----------------- */}
+      {showPhoneSimulator && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 print:hidden">
+          <div onClick={() => setShowPhoneSimulator(false)} className="fixed inset-0 bg-black/85 backdrop-blur-md" />
+          
+          <div className="relative z-10 flex flex-col items-center max-w-sm w-full animate-in fade-in zoom-in-95 duration-200">
             
-            <div className="flex items-center justify-between pb-3 border-b border-slate-700/40">
-              <div className="flex items-center gap-2">
-                <Edit3 className="w-5 h-5 text-amber-400" />
-                <h3 className="font-bold text-base">{lang === 'tr' ? 'Araç Kartı Bilgilerini Düzenle' : 'Edit Vehicle Card Info'}</h3>
+            {/* Top Close Bar */}
+            <div className="w-full flex items-center justify-between pb-3 text-white px-2">
+              <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
+                <Smartphone className="w-4 h-4 text-amber-500" />
+                <span>{lang === 'tr' ? 'Ziyaretçi Telefon Ekranı' : 'Visitor Phone Display'}</span>
               </div>
-              <button onClick={() => setIsEditing(false)} className="p-1.5 rounded-lg border border-slate-700 hover:bg-slate-800">
+              <button 
+                onClick={() => setShowPhoneSimulator(false)}
+                className="p-1.5 rounded-full bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white transition-all"
+              >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveEdit} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Araç Plakası' : 'License Plate'}</label>
-                  <input
-                    type="text"
-                    value={editForm.plateNumber}
-                    onChange={(e) => setEditForm({ ...editForm, plateNumber: e.target.value.toUpperCase() })}
-                    placeholder="34 ABC 789"
-                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none font-mono font-bold uppercase`}
-                    required
-                  />
+            {/* Realistic iPhone Bezel Container */}
+            <div className="w-[320px] sm:w-[350px] bg-slate-950 rounded-[48px] p-3 shadow-2xl border-4 border-slate-800 ring-1 ring-white/10 relative">
+              
+              {/* iPhone Screen Area */}
+              <div className="bg-slate-50 rounded-[38px] overflow-hidden text-slate-900 relative shadow-inner">
+                
+                {/* Status Bar & Dynamic Island */}
+                <div className="pt-2 px-5 flex items-center justify-between text-slate-800 text-[10px] font-semibold select-none">
+                  <span>9:41</span>
+                  {/* Dynamic Island */}
+                  <div className="w-20 h-4 bg-black rounded-full mx-auto -mt-0.5" />
+                  <div className="flex items-center gap-1">
+                    <Wifi className="w-3 h-3" />
+                    <Battery className="w-3.5 h-3.5" />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Marka & Model' : 'Brand & Model'}</label>
-                  <input
-                    type="text"
-                    value={editForm.brandModel}
-                    onChange={(e) => setEditForm({ ...editForm, brandModel: e.target.value })}
-                    placeholder="Örn: Toyota Corolla Hibrit"
-                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
-                    required
-                  />
+
+                {/* Simulated Screen Content (Fully Functional) */}
+                <div className="py-2 px-1">
+                  <VisitorExperience isInsideSimulator={true} />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'Araç Sahibi Adı' : 'Owner Name'}</label>
-                  <input
-                    type="text"
-                    value={editForm.ownerName}
-                    onChange={(e) => setEditForm({ ...editForm, ownerName: e.target.value })}
-                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none`}
-                    required
-                  />
+                {/* Home Indicator Bar */}
+                <div className="pb-2 pt-1 flex justify-center">
+                  <div className="w-24 h-1 bg-slate-400 rounded-full" />
                 </div>
-                <div className="space-y-1">
-                  <label className="font-bold text-slate-400 uppercase tracking-wider">{lang === 'tr' ? 'İletişim Telefonu' : 'Contact Phone'}</label>
-                  <input
-                    type="text"
-                    value={editForm.ownerPhone}
-                    onChange={(e) => setEditForm({ ...editForm, ownerPhone: e.target.value })}
-                    placeholder="+90 5XX..."
-                    className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none font-mono`}
-                    required
-                  />
-                </div>
-              </div>
 
-              <div className="space-y-1">
-                <label className="font-bold text-amber-400 uppercase tracking-wider">{lang === 'tr' ? 'Park & Sürücü Notu' : 'Parking Note'}</label>
-                <textarea
-                  value={editForm.parkingNote}
-                  onChange={(e) => setEditForm({ ...editForm, parkingNote: e.target.value })}
-                  rows={3}
-                  placeholder={lang === 'tr' ? 'Hatalı park durumunda lütfen arayın...' : 'Please call if parked inappropriately...'}
-                  className={`w-full p-2.5 rounded-xl border ${isDark ? 'bg-slate-950 border-slate-800 text-white' : 'bg-slate-50 border-slate-300 text-slate-900'} outline-none leading-relaxed`}
-                  required
-                />
               </div>
+            </div>
 
-              {/* Save / Cancel Buttons */}
-              <div className="flex gap-2 pt-4 border-t border-slate-800">
-                <button
-                  type="button"
-                  onClick={() => setIsEditing(false)}
-                  className={`flex-1 py-3 rounded-xl border font-bold ${isDark ? 'border-slate-700 text-slate-300' : 'border-slate-300 text-slate-700'}`}
-                >
-                  {lang === 'tr' ? 'İptal' : 'Cancel'}
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-3 rounded-xl bg-gradient-to-r from-amber-600 to-orange-500 text-white font-bold flex items-center justify-center gap-2 shadow-lg"
-                >
-                  <Save className="w-4 h-4" />
-                  <span>{lang === 'tr' ? 'Kaydet & Canlıya Al' : 'Save & Publish'}</span>
-                </button>
-              </div>
-
-            </form>
+            <p className="text-[11px] text-slate-400 text-center mt-3">
+              {lang === 'tr' ? 'Simülatördeki butonlara tıklayarak WhatsApp mesajını veya aramayı canlı test edebilirsiniz.' : 'You can click buttons in the simulator to test real WhatsApp notifications.'}
+            </p>
 
           </div>
         </div>

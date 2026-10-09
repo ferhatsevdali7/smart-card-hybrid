@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /*?view=admin
+Disallow: /admin
+Disallow: /activate
+
+Sitemap: https://smart-card-hybrid.web.app/sitemap.xml

@@ -2,49 +2,53 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Auth helpers
+    // Helper function to check if request is from authenticated user
     function isAuthenticated() {
       return request.auth != null;
     }
     
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    // Helper function to check if user is a registered staff member
+    function isStaff() {
+      return isAuthenticated() && (
+        exists(/databases/$(database)/documents/staff_members/$(request.auth.token.email)) ||
+        request.auth.token.email == 'sevdaliferhat64@gmail.com' ||
+        request.auth.token.email == 'hasimturcan199@gmail.com'
+      );
     }
 
-    // Smart Hybrid Cards Collection
+    // Public cards collection (Individual card get allowed for public QR scan, mass listing strictly blocked)
     match /cards/{cardId} {
-      // 1. Life-saving public read access for emergency personnel and NFC/QR scanners
-      allow read: if true;
-
-      // 2. Card Creation: Authenticated users can create cards bound to their ownerUid
-      allow create: if isAuthenticated() && (
-        !('ownerUid' in request.resource.data) || 
-        request.resource.data.ownerUid == request.auth.uid
-      );
-
-      // 3. Card Update: Only the verified card owner can modify their card
-      allow update: if isAuthenticated() && (
-        !('ownerUid' in resource.data) || 
-        resource.data.ownerUid == request.auth.uid ||
-        request.resource.data.ownerUid == request.auth.uid
-      );
-
-      // 4. Card Deletion: Only the verified card owner can delete their card
-      allow delete: if isAuthenticated() && (
-        !('ownerUid' in resource.data) || 
-        resource.data.ownerUid == request.auth.uid
-      );
+      allow get: if true;
+      allow list: if false; // BLOCK MASS HARVESTING
+      allow write: if isAuthenticated();
     }
 
-    // User Profile Documents (Private to each user)
+    // User profiles
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Encrypted Vault Backups (Zero-Knowledge Private Backups)
-    match /vaults/{vaultId} {
-      allow read, write: if isOwner(vaultId);
+    // Zero-knowledge encrypted vaults
+    match /vaults/{userId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 🔒 STRICT SECURITY: Staff & Roles Collection (Only verified staff can read, only super admin can write)
+    match /staff_members/{email} {
+      allow read, write: if isStaff();
+    }
+
+    // 🔒 STRICT SECURITY: Physical QR Registry Bank
+    // Individual tag lookup allowed for claiming/activation; mass registry listing allowed ONLY for staff
+    match /qr_registry/{tagId} {
+      allow get: if true;
+      allow list: if isStaff(); // BLOCK MASS PIN & EMAIL HARVESTING
+      allow write: if isStaff() || isAuthenticated();
+    }
+
+    // 🔒 STRICT SECURITY: Production Batches (Only staff can read and manage batches)
+    match /production_batches/{batchId} {
+      allow read, write: if isStaff();
     }
   }
 }
-

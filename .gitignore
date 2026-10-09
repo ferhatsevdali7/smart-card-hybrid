@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Ortam degiskenleri (gizli)
+.env
+.env.*
+!.env.example
