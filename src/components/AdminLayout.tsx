@@ -20,17 +20,27 @@ interface AdminLayoutProps {
   expiresAt: number;
   /** Profil ve Ayarlar gibi kendi menüsü olan sayfalarda kenar menü gizlenir */
   hideSidebar?: boolean;
+  /** Menüde bölüm adının yanında gösterilen sayılar (QR Deposu, Satış Standı…) */
+  navCounts?: Record<string, number>;
+  /** Üst çubuktaki konum yazısına eklenen alt sayfa (örn. parti kodu) */
+  crumbExtra?: string | null;
   children: React.ReactNode;
 }
 
-const NAV: { group: 'ops' | 'sec'; id: string; icon: IconName; tr: string; en: string }[] = [
+const NAV: { group: 'ops' | 'out' | 'sec'; id: string; icon: IconName; tr: string; en: string }[] = [
   { group: 'ops', id: 'overview', icon: 'grid', tr: 'Genel Bakış', en: 'Overview' },
-  { group: 'ops', id: 'batches', icon: 'layers', tr: 'Üretim Partileri', en: 'Production Batches' },
-  { group: 'ops', id: 'qr_bank', icon: 'qr', tr: 'QR Bankası', en: 'QR Bank' },
+  { group: 'ops', id: 'depot', icon: 'box', tr: 'QR Deposu', en: 'QR Stock' },
+  { group: 'ops', id: 'stand', icon: 'store', tr: 'Satış Standı', en: 'On Sale' },
+  { group: 'ops', id: 'bank', icon: 'qr', tr: 'QR Bankası', en: 'QR Bank' },
   { group: 'ops', id: 'vehicles', icon: 'car', tr: 'Bağlı Araçlar', en: 'Linked Vehicles' },
   { group: 'ops', id: 'users', icon: 'users', tr: 'Kullanıcılar', en: 'Users' },
+  { group: 'out', id: 'disabled', icon: 'ban', tr: 'Devre Dışı', en: 'Disabled' },
+  { group: 'out', id: 'trash', icon: 'trash', tr: 'Çöp Kutusu', en: 'Trash' },
   { group: 'sec', id: 'audit', icon: 'shield', tr: 'Denetim Kayıtları', en: 'Audit Logs' },
 ];
+
+/** Alt sayfalar menüde ana sayfalarını vurgular */
+const PARENT: Record<string, string> = { compare: 'overview', batch: 'depot' };
 
 export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
   useAdminFonts();
@@ -42,14 +52,14 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
 
   useEffect(() => { setNavOpen(false); }, [p.activeSection]);
 
-  const current = NAV.find((n) => n.id === p.activeSection);
+  const current = NAV.find((n) => n.id === (PARENT[p.activeSection] || p.activeSection));
   const crumb = p.activeSection.startsWith('settings') ? L('Profil ve Ayarlar', 'Profile & Settings')
     : p.activeSection === 'compare' ? L('Dönem karşılaştırma', 'Period comparison')
-      : current ? L(current.tr, current.en) : '';
+      : current ? `${L(current.tr, current.en)}${p.crumbExtra ? ` / ${p.crumbExtra}` : ''}` : '';
 
   const navLink = (n: (typeof NAV)[number]) => {
-    // Dönem karşılaştırma, Genel Bakış'ın alt sayfasıdır.
-    const on = p.activeSection === n.id || (n.id === 'overview' && p.activeSection === 'compare');
+    const on = p.activeSection === n.id || PARENT[p.activeSection] === n.id;
+    const count = p.navCounts?.[n.id];
     return (
       <button
         key={n.id}
@@ -60,19 +70,22 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
         style={{ background: on ? 'var(--a-active)' : undefined, color: on ? 'var(--a-text)' : 'var(--a-text2)', fontWeight: on ? 600 : 400 }}
       >
         <span style={{ color: on ? 'var(--a-accent)' : 'currentColor' }}><Icon name={n.icon} size={18} /></span>
-        {L(n.tr, n.en)}
+        <span className="flex-1 truncate">{L(n.tr, n.en)}</span>
+        {count !== undefined && <span className="text-[12px] font-normal" style={{ color: 'var(--a-faint)', fontFeatureSettings: '"tnum" 1' }}>{count}</span>}
       </button>
     );
   };
 
   const groupTitle = (text: string, first = false) => (
-    <div className={`px-2.5 ${first ? 'pt-1.5' : 'pt-4'} pb-2 text-[11px] font-medium uppercase tracking-[0.6px]`} style={{ color: 'var(--a-faint)' }}>{text}</div>
+    <div className={`px-2.5 ${first ? 'pt-1.5' : 'pt-4'} pb-2 text-[12px]`} style={{ color: 'var(--a-faint)' }}>{text}</div>
   );
 
   const sidebar = (
     <nav aria-label={L('Yönetim menüsü', 'Admin menu')} className="flex flex-col gap-0.5 p-3 pt-4">
-      {groupTitle(L('Operasyon', 'Operations'), true)}
+      {groupTitle(L('QR ve müşteriler', 'QR & customers'), true)}
       {NAV.filter((n) => n.group === 'ops').map(navLink)}
+      {groupTitle(L('Kullanım dışı', 'Out of use'))}
+      {NAV.filter((n) => n.group === 'out').map(navLink)}
       {groupTitle(L('Güvenlik', 'Security'))}
       {NAV.filter((n) => n.group === 'sec').map(navLink)}
     </nav>

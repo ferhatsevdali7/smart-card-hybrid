@@ -30,7 +30,8 @@ export interface VehicleNotice {
   createdAt: Date | null;
 }
 
-export type TagStatus = 'unclaimed' | 'active' | 'disabled' | 'expired';
+/** in_stock: depoda (satışa çıkmamış) · on_sale: satış standında · unclaimed: eski kayıt (= in_stock) */
+export type TagStatus = 'in_stock' | 'on_sale' | 'unclaimed' | 'active' | 'disabled' | 'expired' | 'trashed';
 
 /** tags koleksiyonundaki etiket (sahibi ve yöneticiler okuyabilir) */
 export interface TagRecord {
@@ -60,9 +61,10 @@ export type ClaimResult =
   | 'EXPIRED'
   | 'OWNED_BY_OTHER'
   | 'ALREADY_LINKED'
-  | 'VEHICLE_HAS_TAG';
+  | 'VEHICLE_HAS_TAG'
+  | 'NOT_ACTIVATED';
 
-export type ScanStatus = 'not_found' | 'unclaimed' | 'unassigned' | 'disabled' | 'expired' | 'active';
+export type ScanStatus = 'not_found' | 'not_activated' | 'unclaimed' | 'unassigned' | 'disabled' | 'expired' | 'active';
 
 export interface ScanResponse {
   status: ScanStatus;

@@ -369,8 +369,10 @@ const CompareChart: React.FC<{ lines: Line[]; lang: AdminLang; unitLabel: string
     setHover(Math.max(0, Math.min(n - 1, i)));
   };
 
+  // Dönem eklenip çıkarıldığında eski imleç konumu dizinin dışında kalabilir.
+  const hv = hover !== null && hover < n ? hover : null;
   const tipW = 250;
-  const hx = hover !== null ? x(hover) : 0;
+  const hx = hv !== null ? x(hv) : 0;
   const tipLeft = hx + 14 + tipW > width ? hx - 14 - tipW : hx + 14;
 
   const dateOf = (l: Line, i: number) => {
@@ -409,29 +411,29 @@ const CompareChart: React.FC<{ lines: Line[]; lang: AdminLang; unitLabel: string
             ? <circle key={l.id} cx={x(0)} cy={y(l.g[0])} r={3} fill={l.color} />
             : <polyline key={l.id} points={l.g.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ')} fill="none" stroke={l.color} strokeWidth={k === 0 ? 1.8 : 1.4} strokeLinejoin="round" strokeLinecap="round" />
         ))}
-        {hover !== null && (
+        {hv !== null && (
           <g pointerEvents="none">
             <line x1={hx} x2={hx} y1={T} y2={B} stroke="var(--a-line3)" />
-            {grouped.map((l) => (hover < l.g.length
-              ? <circle key={l.id} cx={hx} cy={y(l.g[hover])} r={3.5} fill="var(--a-bg)" stroke={l.color} strokeWidth={1.6} />
+            {grouped.map((l) => (hv < l.g.length
+              ? <circle key={l.id} cx={hx} cy={y(l.g[hv])} r={3.5} fill="var(--a-bg)" stroke={l.color} strokeWidth={1.6} />
               : null))}
           </g>
         )}
       </svg>
 
-      {hover !== null && (
+      {hv !== null && (
         <div
           className="absolute top-1 pointer-events-none rounded-lg px-3 py-2.5 text-[12px]"
           style={{ left: Math.max(0, tipLeft), width: tipW, background: 'var(--a-raised)', border: '1px solid var(--a-line2)', boxShadow: 'var(--a-shadow)' }}
         >
-          <div className="mb-2" style={{ color: 'var(--a-text)' }}>{unitName(hover)}</div>
+          <div className="mb-2" style={{ color: 'var(--a-text)' }}>{unitName(hv)}</div>
           {grouped.map((l) => (
             <div key={l.id} className="flex items-center gap-2 mt-1.5 first:mt-0">
               <i className="w-[7px] h-[7px] rounded-full shrink-0" style={{ background: l.color }} />
-              {hover < l.g.length ? (
+              {hv < l.g.length ? (
                 <>
-                  <span className="flex-1 min-w-0 truncate" style={{ color: 'var(--a-muted)' }}>{dateOf(l, hover)}</span>
-                  <span>{N.format(l.g[hover])}</span>
+                  <span className="flex-1 min-w-0 truncate" style={{ color: 'var(--a-muted)' }}>{dateOf(l, hv)}</span>
+                  <span>{N.format(l.g[hv])}</span>
                 </>
               ) : (
                 <span className="flex-1" style={{ color: 'var(--a-faint)' }}>{L('dönem bitti', 'period ended')}</span>

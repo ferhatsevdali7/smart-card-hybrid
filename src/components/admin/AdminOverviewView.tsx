@@ -623,8 +623,11 @@ const TrendChart: React.FC<{
     setHover(Math.max(0, Math.min(n - 1, i)));
   };
 
+  // Veri değişip nokta sayısı azaldığında eski imleç konumu dizinin dışında kalabilir;
+  // (ör. "Aralığa git" sonrası) bu durumda imleç yok sayılır. Çökmeyi bu engeller.
+  const hv = hover !== null && hover < n ? hover : null;
   const tipW = 196;
-  const hx = hover !== null ? x(hover) : 0;
+  const hx = hv !== null ? x(hv) : 0;
   const tipLeft = hx + 14 + tipW > width ? hx - 14 - tipW : hx + 14;
 
   return (
@@ -677,29 +680,29 @@ const TrendChart: React.FC<{
         {prev && <polyline points={line(prev)} fill="none" stroke="var(--a-faint)" strokeWidth={1.25} strokeDasharray="3 3" />}
         <polyline points={line(cur)} fill="none" stroke="var(--a-accent)" strokeWidth={1.6} strokeLinejoin="round" strokeLinecap="round" />
 
-        {hover !== null && (
+        {hv !== null && (
           <g pointerEvents="none">
             <line x1={hx} x2={hx} y1={T} y2={B} stroke="var(--a-line3)" />
-            {prev && <circle cx={hx} cy={y(prev[hover])} r={3} fill="var(--a-bg)" stroke="var(--a-faint)" strokeWidth={1.25} />}
-            <circle cx={hx} cy={y(cur[hover])} r={3.5} fill="var(--a-bg)" stroke="var(--a-accent)" strokeWidth={1.6} />
+            {prev && <circle cx={hx} cy={y(prev[hv])} r={3} fill="var(--a-bg)" stroke="var(--a-faint)" strokeWidth={1.25} />}
+            <circle cx={hx} cy={y(cur[hv])} r={3.5} fill="var(--a-bg)" stroke="var(--a-accent)" strokeWidth={1.6} />
           </g>
         )}
       </svg>
 
-      {hover !== null && (
+      {hv !== null && (
         <div
           className="absolute top-1 pointer-events-none rounded-lg px-3 py-2.5 text-[12px]"
           style={{ left: Math.max(0, tipLeft), width: tipW, background: 'var(--a-raised)', border: '1px solid var(--a-line2)', boxShadow: 'var(--a-shadow)' }}
         >
-          <div className="mb-2" style={{ color: 'var(--a-muted)' }}>{longLabel(buckets[hover])}</div>
+          <div className="mb-2" style={{ color: 'var(--a-muted)' }}>{longLabel(buckets[hv])}</div>
           <div className="flex justify-between gap-3">
             <span className="flex items-center gap-1.5"><i className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--a-accent)' }} />{lang === 'tr' ? 'Bu dönem' : 'This period'}</span>
-            <span>{N.format(cur[hover])}</span>
+            <span>{N.format(cur[hv])}</span>
           </div>
           {prev && (
             <div className="flex justify-between gap-3 mt-1" style={{ color: 'var(--a-muted)' }}>
               <span className="flex items-center gap-1.5"><i className="w-1.5 h-1.5 rounded-full" style={{ background: 'var(--a-faint)' }} />{lang === 'tr' ? 'Karşılaştırma' : 'Comparison'}</span>
-              <span>{N.format(prev[hover])}</span>
+              <span>{N.format(prev[hv])}</span>
             </div>
           )}
         </div>
@@ -864,20 +867,20 @@ const Attention: React.FC<{ items: AttentionItem[]; lang: AdminLang; danger: str
             return row(`s${i}`, 'layers', 'var(--a-muted)', L('Stok azalıyor', 'Stock running low'),
               left ? L(`Boşta ${N.format(it.idle)} etiket · mevcut hızla ${left} yeter`, `${N.format(it.idle)} idle tags · ${left} at the current pace`)
                 : L(`Boşta yalnızca ${N.format(it.idle)} etiket kaldı`, `Only ${N.format(it.idle)} idle tags left`),
-              L('Parti oluştur', 'New batch'), 'batches');
+              L('Parti oluştur', 'New batch'), 'depot');
           }
           case 'pending_batch':
             return row(`b${i}`, 'clock', 'var(--a-muted)', L('Bekleyen parti', 'Pending batch'),
               L(`${it.batchId} · ${it.waitingDays} gündür baskıya gönderilmedi`, `${it.batchId} · not sent to print for ${it.waitingDays} days`),
-              L('Aç', 'Open'), 'batches');
+              L('Aç', 'Open'), 'depot');
           case 'lost':
             return row(`l${i}`, 'alert', danger, L(`${N.format(it.count)} kayıp bildirimi`, `${N.format(it.count)} lost reports`),
               L('Son 30 günde müşteriler etiketini kayıp bildirdi; etiketler otomatik kapatıldı', 'Reported lost in the last 30 days; tags were closed automatically'),
-              L('İncele', 'Review'), 'qr_bank');
+              L('İncele', 'Review'), 'disabled');
           case 'scan_spike':
             return row(`a${i}`, 'alert', danger, L('Şüpheli okutma', 'Suspicious scans'),
               L(`${it.serial || it.code} · son 1 saatte ${N.format(it.count)}+ okutma`, `${it.serial || it.code} · ${N.format(it.count)}+ scans in an hour`),
-              L('Etiketi aç', 'Open tag'), 'qr_bank');
+              L('Etiketi aç', 'Open tag'), 'bank');
           default:
             return null;
         }
@@ -900,6 +903,13 @@ const ACTION_TEXT: Record<string, { tr: string; en: string }> = {
   admin_reset: { tr: 'eşleşmeyi sıfırladı', en: 'reset a tag' },
   notice_sent: { tr: 'bildirim gönderdi', en: 'sent a notice' },
   scan_alert: { tr: 'şüpheli okutma işaretledi', en: 'flagged suspicious scans' },
+  tags_released: { tr: 'QR satışa çıkardı', en: 'released QR codes' },
+  tags_unreleased: { tr: 'QR depoya geri aldı', en: 'returned QR codes to stock' },
+  tags_printed: { tr: 'QR basıldı olarak işaretledi', en: 'marked QR codes printed' },
+  tags_unprinted: { tr: 'QR basılmadı olarak işaretledi', en: 'marked QR codes unprinted' },
+  tags_trashed: { tr: 'QR çöpe attı', en: 'trashed QR codes' },
+  tags_restored: { tr: 'QR geri yükledi', en: 'restored QR codes' },
+  tags_purged: { tr: 'QR kalıcı olarak sildi', en: 'permanently deleted QR codes' },
 };
 
 const Recent: React.FC<{ list: RecentEvent[]; lang: AdminLang }> = ({ list, lang }) => {

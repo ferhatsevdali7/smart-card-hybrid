@@ -115,7 +115,7 @@ export const adminOverview = onCall({ region: 'europe-west1', timeoutSeconds: 60
   const tags = db().collection('tags').where('productType', '==', VEHICLE_PRODUCT);
   const [
     users, vehiclesSnap, activeSnap, closedSnap, tokensSnap, staffSnap,
-    tagsTotal, tagsIdle, firstTagSnap, pendingSnap, alertsSnap, eventsSnap, scansSince,
+    tagsTotal, idleStock, idleSale, idleLegacy, firstTagSnap, batchesSnap, alertsSnap, eventsSnap, scansSince, trashedSnap,
   ] = await Promise.all([
     listAllUsers(),
     db().collection('vehicles').select('ownerUid', 'plateNumber', 'tagCode', 'createdAt').get(),
@@ -126,13 +126,19 @@ export const adminOverview = onCall({ region: 'europe-west1', timeoutSeconds: 60
     db().collectionGroup('push_tokens').select().get(),
     db().collection('staff_members').select().get(),
     countOf(tags),
-    countOf(tags.where('status', '==', 'unclaimed')),
+    countOf(tags.where('status', '==', 'in_stock')),
+    countOf(tags.where('status', '==', 'on_sale')),
+    countOf(tags.where('status', '==', 'unclaimed')), // eski kayıtlar (geçişten önce)
     db().collection('tags').orderBy('createdAt').limit(1).select('createdAt').get(),
-    db().collection('production_batches').where('status', '==', 'STATUS_CREATED').select('createdAt', 'totalCount').get(),
+    db().collection('production_batches').select('createdAt', 'totalCount', 'counts').get(),
     db().collection('scan_alerts').where('at', '>=', Timestamp.fromMillis(Date.now() - 24 * 3600 * 1000)).get(),
     db().collection('tag_events').orderBy('at', 'desc').limit(8).get(),
     countersStartDay(),
+    db().collection('tags').where('status', '==', 'trashed').select('productType', 'trashedAt').get(),
   ]);
+
+  // Boşta = depoda + satış standında (henüz müşteriye bağlanmamış)
+  const tagsIdle = idleStock + idleSale + idleLegacy;
 
   if (range === 'all') {
     let earliest = Date.now();
@@ -177,7 +183,10 @@ export const adminOverview = onCall({ region: 'europe-west1', timeoutSeconds: 60
       return null;
     });
   }
-  const tagsIdlePrev = tagsTotalPrev === null ? null : Math.max(0, tagsTotalPrev - activeBefore.length - closedBefore);
+  // Karşılaştırma döneminin sonunda çöpte olanlar boşta sayılmaz.
+  const trashedBefore = trashedSnap.docs.filter((d) => d.get('productType') === VEHICLE_PRODUCT)
+    .filter((d) => { const ms = toMs(d.get('trashedAt')); return ms === null || ms < cutMs; }).length;
+  const tagsIdlePrev = tagsTotalPrev === null ? null : Math.max(0, tagsTotalPrev - activeBefore.length - closedBefore - trashedBefore);
 
   // ------------------------------------------------------------- müşteriler
   const usersWithTag = new Set(active.map((t) => t.userId).filter(Boolean) as string[]);
@@ -249,9 +258,14 @@ export const adminOverview = onCall({ region: 'europe-west1', timeoutSeconds: 60
   if (tagsIdle < 50 || (daysLeft !== null && daysLeft < 45)) {
     attention.push({ kind: 'stock', idle: tagsIdle, daysLeft });
   }
-  pendingSnap.docs
-    .map((d) => ({ id: d.id, createdMs: toMs(d.get('createdAt')), count: Number(d.get('totalCount')) || 0 }))
-    .filter((b) => b.createdMs !== null && now - b.createdMs > 24 * 3600 * 1000)
+  // Bekleyen parti: tamamı hâlâ depoda ve hiçbiri basılmamış, 1 günden eski partiler.
+  batchesSnap.docs
+    .map((d) => {
+      const c = (d.get('counts') || {}) as Record<string, number>;
+      const live = ['in_stock', 'on_sale', 'active', 'disabled', 'expired', 'trashed'].reduce((a, k) => a + (Number(c[k]) || 0), 0);
+      return { id: d.id, createdMs: toMs(d.get('createdAt')), count: live, inStock: Number(c.in_stock) || 0, printed: Number(c.printed) || 0, hasCounts: !!d.get('counts') };
+    })
+    .filter((b) => b.hasCounts && b.count > 0 && b.inStock === b.count && b.printed === 0 && b.createdMs !== null && now - b.createdMs > 24 * 3600 * 1000)
     .sort((a, b) => (a.createdMs || 0) - (b.createdMs || 0))
     .slice(0, 3)
     .forEach((b) => attention.push({ kind: 'pending_batch', batchId: b.id, count: b.count, waitingDays: Math.floor((now - (b.createdMs || now)) / 86400000) }));
@@ -267,10 +281,11 @@ export const adminOverview = onCall({ region: 'europe-west1', timeoutSeconds: 60
   const userById = new Map(users.map((u) => [u.uid, u]));
   const events = eventsSnap.docs.map((d) => d.data());
   const codes = [...new Set(events.map((e) => e.code).filter((c) => typeof c === 'string'))] as string[];
-  const staffUids = [...new Set(events.map((e) => e.by).filter((uid) => {
-    const email = typeof uid === 'string' ? userById.get(uid)?.email?.toLowerCase() : undefined;
+  const staffUids = [...new Set(events.filter((e) => {
+    const email = (typeof e.by === 'string' ? userById.get(e.by)?.email?.toLowerCase() : undefined)
+      || (typeof e.byEmail === 'string' ? e.byEmail.toLowerCase() : undefined);
     return !!email && staffEmails.has(email);
-  }))] as string[];
+  }).map((e) => e.by).filter((uid) => typeof uid === 'string'))] as string[];
   const [tagDocs, profileDocs] = await Promise.all([
     codes.length ? db().getAll(...codes.map((c) => db().collection('tags').doc(c))) : Promise.resolve([]),
     staffUids.length ? db().getAll(...staffUids.map((u) => db().collection('admin_profiles').doc(u))) : Promise.resolve([]),
@@ -282,7 +297,8 @@ export const adminOverview = onCall({ region: 'europe-west1', timeoutSeconds: 60
     const action = String(e.action || '');
     const by = typeof e.by === 'string' ? e.by : null;
     const u = by ? userById.get(by) : undefined;
-    const email = u?.email?.toLowerCase() || '';
+    // Toplu işlemlerde yöneticinin e-postası kayıtta da tutulur.
+    const email = u?.email?.toLowerCase() || (typeof e.byEmail === 'string' ? e.byEmail.toLowerCase() : '');
     let actor: 'staff' | 'customer' | 'visitor' | 'system' = 'customer';
     let actorName = '';
     if (action === 'notice_sent') actor = 'visitor';
@@ -292,7 +308,9 @@ export const adminOverview = onCall({ region: 'europe-west1', timeoutSeconds: 60
       actorName = (by && nameOf.get(by)) || u?.displayName || email.split('@')[0];
     }
     let target = '';
+    const many = typeof e.count === 'number' && e.count > 1 && Array.isArray(e.batchIds);
     if (action === 'batch_created') target = String(e.batchId || '');
+    else if (many) target = `${e.count} QR · ${(e.batchIds as string[]).join(', ')}`;
     else if (action === 'notice_sent') target = String(e.plateMasked || '');
     else if (typeof e.code === 'string') target = serialOf.get(e.code) || e.code;
     return { at: toMs(e.at), action, actor, actorName, target };

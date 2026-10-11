@@ -29,6 +29,18 @@ export const adminSetTagStatusFn = call<
   { result: 'OK'; status: string }
 >('adminSetTagStatus');
 
+export const adminTagActionFn = call<
+  { codes: string[]; action: string; note?: string },
+  { done: number; skipped: { code: string; reason: string }[] }
+>('adminTagAction');
+
+export const adminBatchActionFn = call<
+  { batchId: string; action: 'release_all' | 'print_all' | 'trash' },
+  { done: number; skipped: { code: string; reason: string }[] }
+>('adminBatchAction');
+
+export const adminEnsureLifecycleFn = call<Record<string, never>, { migrated: boolean }>('adminEnsureLifecycle');
+
 export const adminOverviewFn = call<
   { range: string; compare?: string; from?: string; to?: string; fresh?: boolean },
   import('./overviewService').OverviewData

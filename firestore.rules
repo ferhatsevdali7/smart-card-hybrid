@@ -219,6 +219,8 @@ service cloud.firestore {
     match /stats_shards/{id} { allow read, write: if false; }
     match /stats_meta/{id}   { allow read, write: if false; }
     match /scan_alerts/{id}  { allow read, write: if false; }
+    // Kalıcı silinmiş QR kodlarının kaydı (kod bir daha üretilmez, okutulursa "kapatılmış" görünür)
+    match /tag_tombstones/{id} { allow read, write: if false; }
 
     // Listelenmeyen her şey kapalı.
     match /{document=**} {

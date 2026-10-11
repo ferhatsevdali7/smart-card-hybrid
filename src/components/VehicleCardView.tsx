@@ -38,6 +38,7 @@ const CLAIM_MESSAGES: Record<ClaimResult, { tr: string; en: string; ok: boolean 
   DISABLED: { tr: 'Bu QR kapatılmış, kullanıma kapalı.', en: 'This QR has been disabled.', ok: false },
   EXPIRED: { tr: "Bu QR'ın hizmet süresi dolmuş.", en: 'This QR service period has ended.', ok: false },
   WRONG_PRODUCT: { tr: 'Bu QR bir araç kartı etiketi değil.', en: 'This QR is not a vehicle tag.', ok: false },
+  NOT_ACTIVATED: { tr: 'Bu QR henüz etkinleştirilmedi. Satın aldığınız yerle iletişime geçin.', en: 'This QR has not been activated yet. Please contact the seller.', ok: false },
   VEHICLE_HAS_TAG: { tr: "Bu araçta zaten bir QR var. Önce mevcut QR'ı araçtan ayırın.", en: 'This vehicle already has a QR. Unlink it first.', ok: false },
 };
 

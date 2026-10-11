@@ -88,6 +88,14 @@ export const PublicTagScanPage: React.FC<{ code: string }> = ({ code }) => {
           />
         )}
 
+        {data?.status === 'not_activated' && (
+          <StatusCard
+            icon={<Clock className="w-10 h-10 text-amber-500" />}
+            title="Bu QR henüz etkinleştirilmedi"
+            text="Bu etiket henüz satışa sunulmamış. Satın aldıysanız lütfen satıcınızla iletişime geçin."
+          />
+        )}
+
         {data?.status === 'disabled' && (
           <StatusCard
             icon={<Ban className="w-10 h-10 text-rose-500" />}

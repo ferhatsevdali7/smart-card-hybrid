@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { AdminLayout } from './AdminLayout';
-import { BatchProductionView } from './BatchProductionView';
-import { QrBankAdminView } from './QrBankAdminView';
 import { AdminPortalView } from './AdminPortalView';
 import { AdminSettingsView } from './admin/AdminSettingsView';
 import { AdminOverviewView } from './admin/AdminOverviewView';
 import { AdminCompareView } from './admin/AdminCompareView';
+import { AdminDepotView, sumCounts } from './admin/AdminDepotView';
+import { AdminBatchView } from './admin/AdminBatchView';
+import { AdminBankView, AdminDisabledView, AdminStandView, AdminTrashView } from './admin/AdminStageViews';
+import { LBatch, ensureLifecycle, listenBatches } from '../lib/lifecycleService';
 import type { SettingsTab } from './admin/ProfileMenu';
 import { AdminLang, Icon, IconName, roleLabel, useResolvedDark } from './admin/adminUi';
 import {
@@ -32,6 +34,9 @@ export const AdminDashboardContainer: React.FC = () => {
   const [sessions, setSessions] = useState<AdminSessionRecord[]>([]);
   // null: yükleniyor, 'ok': yüklendi, 'error': okunamadı
   const [sessionsState, setSessionsState] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [batchId, setBatchId] = useState<string | null>(null);
+  const [batches, setBatches] = useState<LBatch[] | null>(null);
+  const [batchesError, setBatchesError] = useState(false);
 
   useEffect(() => onAuthStateChanged(auth, setAuthUser), []);
 
@@ -59,6 +64,17 @@ export const AdminDashboardContainer: React.FC = () => {
     const beat = setInterval(() => touchAdminSession(session.token).catch(() => undefined), 5 * 60 * 1000);
     return () => { stopProfile(); stopSessions(); stopWatch(); clearInterval(beat); };
   }, [uid, session?.token]);
+
+  // QR partileri (QR Deposu ve menüdeki sayılar için). İlk açılışta eski kayıtlar yeni yapıya taşınır.
+  useEffect(() => {
+    if (!uid) return;
+    ensureLifecycle();
+    setBatchesError(false);
+    return listenBatches(
+      (list) => { setBatches(list); setBatchesError(false); },
+      (e) => { console.error('[batches]', e); setBatchesError(true); },
+    );
+  }, [uid]);
 
   // Süre dolunca otomatik çıkış
   useEffect(() => {
@@ -93,6 +109,19 @@ export const AdminDashboardContainer: React.FC = () => {
   }
 
   const L = (tr: string, en: string) => (lang === 'tr' ? tr : en);
+  // Eski bölüm adları (Genel Bakış bağlantıları vb.) yeni sayfalara yönlenir.
+  const ALIASES: Record<string, string> = { batches: 'depot', qr_bank: 'bank' };
+  const go = (section: string) => { setActiveSection(ALIASES[section] || section); if (section !== 'batch') setBatchId(null); };
+  const openBatch = (id: string) => { setBatchId(id); setActiveSection('batch'); };
+  const totals = batches ? sumCounts(batches) : null;
+  const navCounts: Record<string, number> = totals ? {
+    depot: totals.in_stock + totals.on_sale + totals.active + totals.disabled + totals.expired + totals.trashed,
+    stand: totals.on_sale,
+    bank: totals.active,
+    disabled: totals.disabled + totals.expired,
+    trash: totals.trashed,
+  } : {};
+  const role = session.role;
   const openSettings = (tab: SettingsTab) => { setSettingsTab(tab); setActiveSection('settings'); };
   const inSettings = activeSection === 'settings';
 
@@ -100,7 +129,9 @@ export const AdminDashboardContainer: React.FC = () => {
     <AdminLayout
       session={session}
       activeSection={activeSection}
-      onSelectSection={setActiveSection}
+      onSelectSection={go}
+      navCounts={navCounts}
+      crumbExtra={activeSection === 'batch' && batchId ? batchId : null}
       onOpenSettings={openSettings}
       onLogout={handleLogout}
       lang={lang}
@@ -136,13 +167,25 @@ export const AdminDashboardContainer: React.FC = () => {
       )}
 
       {activeSection === 'overview' && (
-        <AdminOverviewView lang={lang} isDark={isDark} uid={uid} onNavigate={setActiveSection} />
+        <AdminOverviewView lang={lang} isDark={isDark} uid={uid} onNavigate={go} />
       )}
       {activeSection === 'compare' && (
-        <AdminCompareView lang={lang} isDark={isDark} onNavigate={setActiveSection} />
+        <AdminCompareView lang={lang} isDark={isDark} onNavigate={go} />
       )}
-      {activeSection === 'batches' && <BatchProductionView adminEmail={session.email} />}
-      {activeSection === 'qr_bank' && <QrBankAdminView adminEmail={session.email} />}
+      {activeSection === 'depot' && (
+        <AdminDepotView lang={lang} isDark={isDark} role={role} batches={batches} batchesError={batchesError} onOpenBatch={openBatch} />
+      )}
+      {activeSection === 'batch' && batchId && (
+        <AdminBatchView
+          lang={lang} isDark={isDark} role={role} batchId={batchId}
+          batch={batches?.find((b) => b.id === batchId)}
+          onBack={() => go('depot')}
+        />
+      )}
+      {activeSection === 'stand' && <AdminStandView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
+      {activeSection === 'bank' && <AdminBankView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
+      {activeSection === 'disabled' && <AdminDisabledView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
+      {activeSection === 'trash' && <AdminTrashView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
 
       {activeSection === 'vehicles' && (
         <Placeholder icon="car" title={L('Bağlı Araçlar', 'Linked Vehicles')} text={L('Araç ve etiket eşleşmeleri bu bölümde listelenecek.', 'Vehicle and tag links will be listed here.')} />

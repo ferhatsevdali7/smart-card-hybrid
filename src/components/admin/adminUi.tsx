@@ -140,7 +140,8 @@ export type IconName =
   | 'layers' | 'qr' | 'car' | 'users' | 'shield' | 'user' | 'key' | 'devices' | 'activity' | 'help'
   | 'logout' | 'globe' | 'sun' | 'moon' | 'laptop' | 'chevronDown' | 'chevronLeft' | 'chevronRight'
   | 'menu' | 'x' | 'check' | 'lock' | 'phone' | 'clock' | 'info' | 'login' | 'ban'
-  | 'grid' | 'alert' | 'calendar' | 'refresh' | 'plus' | 'trash' | 'arrowUp' | 'arrowDown';
+  | 'grid' | 'alert' | 'calendar' | 'refresh' | 'plus' | 'trash' | 'arrowUp' | 'arrowDown'
+  | 'box' | 'store' | 'print' | 'zip' | 'undo' | 'search' | 'dots' | 'download' | 'arrowRight' | 'arrowLeft';
 
 const PATHS: Record<IconName, React.ReactNode> = {
   layers: <><path d="m12 3 9 5-9 5-9-5 9-5z" /><path d="m3 13 9 5 9-5" /></>,
@@ -178,6 +179,16 @@ const PATHS: Record<IconName, React.ReactNode> = {
   trash: <><path d="M4 7h16M10 11v6M14 11v6" /><path d="M6 7l1 13h10l1-13M9 7V4h6v3" /></>,
   arrowUp: <path d="M12 19V5M6 11l6-6 6 6" />,
   arrowDown: <path d="M12 5v14M6 13l6 6 6-6" />,
+  box: <><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9z" /><path d="m4 7.5 8 4.5 8-4.5M12 12v9" /></>,
+  store: <><path d="M4 9h16l-1.5-5h-13z" /><path d="M5 9v11h14V9M9 20v-6h6v6" /></>,
+  print: <><path d="M7 9V3h10v6" /><rect x="3" y="9" width="18" height="8" rx="2" /><path d="M7 14h10v7H7z" /></>,
+  zip: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M11 7h1M11 10h1M11 13h1v3h-1z" /></>,
+  undo: <><path d="M9 14 4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></>,
+  search: <><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></>,
+  dots: <><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></>,
+  download: <><path d="M12 4v11M7 10l5 5 5-5" /><path d="M5 20h14" /></>,
+  arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
+  arrowLeft: <path d="M19 12H5M11 6l-6 6 6 6" />,
 };
 
 /** İki/üç seçenekli kaydırmalı seçici */

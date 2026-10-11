@@ -5,6 +5,8 @@
  * etiketi araca bağlayan ve ziyaretçiye veri gösteren her işlem burada yapılır.
  * Araç sahibinin telefon numarası bu dosyadaki hiçbir yanıtta yer almaz.
  *
+ * QR yaşam döngüsü kuralları için lifecycle.ts dosyasına bakın.
+ *
  * Koleksiyonlar:
  *   tags/{code}                      QR etiketi (code = QR'daki rastgele 12 karakter)
  *   vehicles/{vehicleId}             Araç (sahibine özel)
@@ -32,10 +34,11 @@ import {
 import { sendPushToUser } from './push';
 import { bumpStat, dayKey, rollupShards } from './stats';
 
+import { TOMBSTONES, applyTagCounts, runTagAction, snap, stageOf } from './lifecycle';
+
 export { adminOverview, adminPeriodSeries } from './overview';
+export { adminTagAction, adminBatchAction, adminEnsureLifecycle, adminRecountBatches } from './lifecycle';
 
-
-type TagStatus = 'unclaimed' | 'active' | 'disabled' | 'expired';
 
 const tagsCol = () => db().collection('tags');
 const vehiclesCol = () => db().collection('vehicles');
@@ -58,9 +61,13 @@ export const scanTag = onCall(async (req) => {
   await rateLimit(`scan:tag:${code}`, LIMITS.scanPerTag[0], LIMITS.scanPerTag[1]);
 
   const tagRef = tagsCol().doc(code);
-  const snap = await tagRef.get();
-  if (!snap.exists) return { status: 'not_found' };
-  const tag = snap.data()!;
+  const tagSnap = await tagRef.get();
+  if (!tagSnap.exists) {
+    // Kalıcı silinmiş QR: "bizim değil" yerine "kapatılmış" denir (basılmış eski etiket yanıltmasın).
+    const tomb = await db().collection(TOMBSTONES).doc(code).get();
+    return { status: tomb.exists ? 'disabled' : 'not_found' };
+  }
+  const tag = tagSnap.data()!;
   if (tag.productType !== VEHICLE_PRODUCT) return { status: 'not_found' };
 
   // Okutma sayacı ve saatlik yoğunluk takibi; hata olursa ziyaretçiyi etkilemesin.
@@ -81,12 +88,15 @@ export const scanTag = onCall(async (req) => {
   }
   await bumpStat('scans');
 
-  const status = tag.status as TagStatus;
+  const stage = stageOf(tag.status);
   const isOwner = !!req.auth && req.auth.uid === tag.assignedUserId;
 
-  if (status === 'disabled') return { status: 'disabled' };
-  if (status === 'expired') return { status: 'expired', isOwner };
-  if (status === 'unclaimed') return { status: 'unclaimed', serial: tag.tagId };
+  if (stage === 'disabled' || stage === 'trashed' || !stage) return { status: 'disabled' };
+  if (stage === 'expired') return { status: 'expired', isOwner };
+  // Depodaki (satışa çıkmamış) QR çalışmaz.
+  if (stage === 'in_stock') return { status: 'not_activated' };
+  // Satış standındaki QR: sahibi henüz bağlamamış.
+  if (stage === 'on_sale') return { status: 'unclaimed', serial: tag.tagId };
 
   if (!tag.assignedVehicleId) return { status: 'unassigned', isOwner };
   const vSnap = await vehiclesCol().doc(tag.assignedVehicleId).get();
@@ -189,12 +199,17 @@ export const claimTag = onCall(async (req) => {
     if (!vSnap.exists || !v || v.ownerUid !== uid) {
       throw new HttpsError('permission-denied', 'Araç bulunamadı.');
     }
-    if (!tagSnap.exists) return { result: 'NOT_OURS' };
+    if (!tagSnap.exists) {
+      const tomb = await tx.get(db().collection(TOMBSTONES).doc(code));
+      return { result: tomb.exists ? 'DISABLED' : 'NOT_OURS' };
+    }
     const tag = tagSnap.data()!;
+    const stage = stageOf(tag.status);
 
     if (tag.productType !== VEHICLE_PRODUCT) return { result: 'WRONG_PRODUCT' };
-    if (tag.status === 'disabled') return { result: 'DISABLED' };
-    if (tag.status === 'expired') return { result: 'EXPIRED' };
+    if (stage === 'disabled' || stage === 'trashed' || !stage) return { result: 'DISABLED' };
+    if (stage === 'expired') return { result: 'EXPIRED' };
+    if (stage === 'in_stock') return { result: 'NOT_ACTIVATED' };
     if (tag.assignedUserId && tag.assignedUserId !== uid) return { result: 'OWNED_BY_OTHER' };
     if (tag.assignedUserId === uid && tag.assignedVehicleId === vehicleId) return { result: 'ALREADY_LINKED' };
     if (v.tagCode && v.tagCode !== code) return { result: 'VEHICLE_HAS_TAG' };
@@ -208,8 +223,12 @@ export const claimTag = onCall(async (req) => {
     }
 
     const now = new Date().toISOString();
+    applyTagCounts(tx, tag.batchId, snap(tag), { stage: 'active', printed: tag.printed === true });
     tx.update(tagRef, {
       status: 'active',
+      stageChangedAt: FieldValue.serverTimestamp(),
+      lastAction: oldVehicleRef ? 'moved' : 'claimed',
+      lastActionBy: email,
       assignedUserId: uid,
       assignedUserEmail: email,
       assignedVehicleId: vehicleId,
@@ -222,7 +241,8 @@ export const claimTag = onCall(async (req) => {
       tx.update(oldVehicleRef, { tagCode: null, tagSerial: null, updatedAt: FieldValue.serverTimestamp() });
     }
     logEvent(tx, { code, action: oldVehicleRef ? 'moved' : 'claimed', by: uid, vehicleId });
-    firstLink = !oldVehicleRef;
+    // Yalnızca satış standından ilk bağlama sayılır (ayırıp yeniden bağlamak sayılmaz).
+    firstLink = stage === 'on_sale';
     return { result: 'OK', serial: tag.tagId || null };
   });
   if (result.result === 'OK' && firstLink) await bumpStat('claims');
@@ -277,10 +297,19 @@ export const reportTagLost = onCall(async (req) => {
       const vSnap = await tx.get(ref);
       if (vSnap.exists && vSnap.data()?.tagCode === code) vRef = ref;
     }
+    const lostStage = stageOf(tag.status);
+    // Zaten kullanım dışıysa (devre dışı / süresi dolmuş / çöpte) yapılacak bir şey yok.
+    if (lostStage !== 'active') return { result: 'OK' };
+    applyTagCounts(tx, tag.batchId, snap(tag), { stage: 'disabled', printed: tag.printed === true });
     tx.update(tagRef, {
       status: 'disabled',
       disabledReason: 'lost',
+      disabledFrom: 'active',
+      disabledAt: FieldValue.serverTimestamp(),
+      disabledBy: null,
       assignedVehicleId: null,
+      stageChangedAt: FieldValue.serverTimestamp(),
+      lastAction: 'reported_lost',
       updatedAtTs: FieldValue.serverTimestamp(),
     });
     if (vRef) tx.update(vRef, { tagCode: null, tagSerial: null, updatedAt: FieldValue.serverTimestamp() });
@@ -333,6 +362,8 @@ export const adminCreateBatch = onCall({ timeoutSeconds: 120 }, async (req) => {
         yearMonth,
         totalCount: count,
         status: 'STATUS_CREATED',
+        // Sayaçlar 0 başlar; etiketler yazıldıkça aynı toplu yazmada artırılır (yarıda kalırsa tutarlı kalır).
+        counts: { in_stock: 0, on_sale: 0, active: 0, disabled: 0, expired: 0, trashed: 0, printed: 0, deleted: 0 },
         notes,
         createdBy: staff.email,
         createdAt: nowIso,
@@ -344,13 +375,35 @@ export const adminCreateBatch = onCall({ timeoutSeconds: 120 }, async (req) => {
     throw new HttpsError('resource-exhausted', 'Bu ay için boş parti numarası bulunamadı.');
   });
 
+  // Kodları üret: mevcut etiketlerle ve kalıcı silinmiş kodlarla çakışanlar yeniden üretilir.
+  const codes: string[] = [];
+  const seen = new Set<string>();
+  while (codes.length < count) {
+    const need = count - codes.length;
+    const candidates: string[] = [];
+    while (candidates.length < need) {
+      const c = generateCode();
+      if (!seen.has(c)) { seen.add(c); candidates.push(c); }
+    }
+    for (let i = 0; i < candidates.length; i += 300) {
+      const part = candidates.slice(i, i + 300);
+      const [existing, tombs] = await Promise.all([
+        db().getAll(...part.map((c) => tagsCol().doc(c))),
+        db().getAll(...part.map((c) => db().collection(TOMBSTONES).doc(c))),
+      ]);
+      part.forEach((c, idx) => { if (!existing[idx].exists && !tombs[idx].exists) codes.push(c); });
+    }
+  }
+
   // Etiketler 400'lük gruplar halinde yazılır (Firestore toplu yazma sınırı 500).
+  // Yeni QR'lar DEPODA başlar: satışa çıkarılana kadar müşteri bağlayamaz.
   const CHUNK = 400;
   for (let start = 1; start <= count; start += CHUNK) {
     const wb = db().batch();
     const end = Math.min(count, start + CHUNK - 1);
+    wb.set(batchesCol.doc(batchId), { counts: { in_stock: FieldValue.increment(end - start + 1) } }, { merge: true });
     for (let i = start; i <= end; i++) {
-      const code = generateCode();
+      const code = codes[i - 1];
       wb.create(tagsCol().doc(code), {
         code,
         tagId: `${prefix}-${productType}-${yearMonth}-${batchNumber}-${String(i).padStart(4, '0')}`,
@@ -358,7 +411,8 @@ export const adminCreateBatch = onCall({ timeoutSeconds: 120 }, async (req) => {
         batchNumber: `${batchId} (${notes})`,
         productType,
         sequenceNumber: i,
-        status: 'unclaimed',
+        status: 'in_stock',
+        printed: false,
         assignedUserId: null,
         assignedUserEmail: null,
         assignedVehicleId: null,
@@ -368,6 +422,9 @@ export const adminCreateBatch = onCall({ timeoutSeconds: 120 }, async (req) => {
         notes: '',
         scanCount: 0,
         lastScanAt: null,
+        lastAction: 'created',
+        lastActionBy: staff.email,
+        stageChangedAt: FieldValue.serverTimestamp(),
         createdAt: nowIso,
         updatedAtTs: FieldValue.serverTimestamp(),
       });
@@ -376,7 +433,7 @@ export const adminCreateBatch = onCall({ timeoutSeconds: 120 }, async (req) => {
   }
 
   await db().collection('tag_events').add({
-    action: 'batch_created', batchId, count, by: staff.uid, at: FieldValue.serverTimestamp(),
+    action: 'batch_created', batchId, count, by: staff.uid, byEmail: staff.email, at: FieldValue.serverTimestamp(),
   });
   return { batchId, count };
 });
@@ -390,6 +447,7 @@ export const adminCreateBatch = onCall({ timeoutSeconds: 120 }, async (req) => {
 // ===========================================================================
 
 export const adminSetTagStatus = onCall(async (req) => {
+  // Eski panel sürümleriyle uyum için korunur; yeni panel adminTagAction kullanır.
   const staff = await requireStaff(req, ['support']);
   const code = parseCode(req.data?.code);
   if (!code) throw new HttpsError('invalid-argument', 'Geçersiz etiket.');
@@ -398,48 +456,10 @@ export const adminSetTagStatus = onCall(async (req) => {
     throw new HttpsError('invalid-argument', 'Geçersiz işlem.');
   }
   const note = typeof req.data?.note === 'string' ? req.data.note.trim().slice(0, 300) : undefined;
-
-  return db().runTransaction(async (tx) => {
-    const tagRef = tagsCol().doc(code);
-    const tagSnap = await tx.get(tagRef);
-    const tag = tagSnap.data();
-    if (!tagSnap.exists || !tag) throw new HttpsError('not-found', 'Etiket bulunamadı.');
-
-    let vRef: DocumentReference | null = null;
-    if (action === 'reset' && tag.assignedVehicleId) {
-      const ref = vehiclesCol().doc(tag.assignedVehicleId);
-      const vSnap = await tx.get(ref);
-      if (vSnap.exists && vSnap.data()?.tagCode === code) vRef = ref;
-    }
-
-    const update: Record<string, unknown> = { updatedAtTs: FieldValue.serverTimestamp() };
-    if (note !== undefined) update.notes = note;
-
-    if (action === 'disable') {
-      update.status = 'disabled';
-      update.disabledReason = 'admin';
-    } else if (action === 'enable') {
-      update.status = tag.assignedUserId ? 'active' : 'unclaimed';
-      update.disabledReason = null;
-    } else if (action === 'expire') {
-      update.status = 'expired';
-    } else {
-      Object.assign(update, {
-        status: 'unclaimed',
-        assignedUserId: null,
-        assignedUserEmail: null,
-        assignedVehicleId: null,
-        assignedPlate: null,
-        activatedAt: null,
-        disabledReason: null,
-      });
-      if (vRef) tx.update(vRef, { tagCode: null, tagSerial: null, updatedAt: FieldValue.serverTimestamp() });
-    }
-
-    tx.update(tagRef, update);
-    logEvent(tx, { code, action: `admin_${action}`, by: staff.uid, byEmail: staff.email, note: note || null });
-    return { result: 'OK', status: update.status };
-  });
+  const r = await runTagAction(staff, [code], action, note);
+  if (!r.done) throw new HttpsError('failed-precondition', r.skipped[0]?.reason || 'İşlem uygulanamadı.');
+  const after = await tagsCol().doc(code).get();
+  return { result: 'OK', status: after.get('status') };
 });
 
 // ===========================================================================
