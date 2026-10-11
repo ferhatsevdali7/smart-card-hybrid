@@ -38,6 +38,32 @@ async function countOf(q: FirebaseFirestore.Query): Promise<number> {
   return (await q.count().get()).data().count;
 }
 
+/** Bir önceki yılın aynı günü (29 Şubat -> 28 Şubat). */
+function shiftYear(key: string, years: number): string {
+  const [y, m, d] = key.split('-');
+  const md = `${m}-${d}` === '02-29' ? '02-28' : `${m}-${d}`;
+  return `${Number(y) + years}-${md}`;
+}
+
+type Metric = 'scans' | 'notices' | 'claims' | 'newUsers' | 'newVehicles';
+type DailySeries = Record<Metric, number[]>;
+
+/** [from, to] aralığının günlük değerleri (sayaçlar + kullanıcı/araç oluşturma zamanları). */
+async function buildDaily(from: string, to: string, userMs: number[], vehicleMs: (number | null)[]): Promise<DailySeries> {
+  const n = daysBetween(from, to) + 1;
+  const mk = () => new Array<number>(n).fill(0);
+  const out: DailySeries = { scans: mk(), notices: mk(), claims: mk(), newUsers: mk(), newVehicles: mk() };
+  const stats = await readDailyStats(from, to);
+  for (let i = 0; i < n; i++) {
+    const st = stats.get(addDays(from, i));
+    if (st) { out.scans[i] = st.scans; out.notices[i] = st.notices; out.claims[i] = st.claims; }
+  }
+  const idx = (ms: number) => daysBetween(from, dayKey(new Date(ms)));
+  userMs.forEach((ms) => { const i = idx(ms); if (i >= 0 && i < n) out.newUsers[i] += 1; });
+  vehicleMs.forEach((ms) => { if (ms === null) return; const i = idx(ms); if (i >= 0 && i < n) out.newVehicles[i] += 1; });
+  return out;
+}
+
 async function listAllUsers(): Promise<UserRecord[]> {
   const out: UserRecord[] = [];
   let token: string | undefined;
@@ -49,7 +75,7 @@ async function listAllUsers(): Promise<UserRecord[]> {
   return out;
 }
 
-export const adminOverview = onCall({ timeoutSeconds: 60, memory: '512MiB' }, async (req) => {
+export const adminOverview = onCall({ region: 'europe-west1', timeoutSeconds: 60, memory: '512MiB' }, async (req) => {
   await requireStaff(req, ['production', 'support', 'warehouse']);
 
   // ------------------------------------------------------------- dönem
@@ -77,7 +103,8 @@ export const adminOverview = onCall({ timeoutSeconds: 60, memory: '512MiB' }, as
     start = addDays(today, -(RANGE_DAYS[range] - 1));
   }
 
-  const cacheKey = `${range}|${start}|${end}`;
+  const compareMode: 'prev' | 'yoy' = req.data?.compare === 'yoy' ? 'yoy' : 'prev';
+  const cacheKey = `${range}|${start}|${end}|${compareMode}`;
   const hit = cache.get(cacheKey);
   if (hit && Date.now() - hit.at < CACHE_MS && req.data?.fresh !== true) return hit.data;
 
@@ -118,10 +145,13 @@ export const adminOverview = onCall({ timeoutSeconds: 60, memory: '512MiB' }, as
 
   const days = daysBetween(start, end) + 1;
   const hasPrev = range !== 'all';
-  const prevEnd = addDays(start, -1);
-  const prevStart = addDays(start, -days);
+  // Karşılaştırma dönemi: hemen önceki aynı uzunluktaki dönem ya da geçen yılın aynı dönemi.
+  const prevStart = compareMode === 'yoy' ? shiftYear(start, -1) : addDays(start, -days);
+  const prevEnd = addDays(prevStart, days - 1);
   const startMs = dayStartMs(start);
-  const startIso = new Date(startMs).toISOString();
+  // "Önceki" değerler: karşılaştırma döneminin sonundaki durum.
+  const cutMs = dayStartMs(addDays(prevEnd, 1));
+  const cutIso = new Date(cutMs).toISOString();
 
   // ------------------------------------------------------------- etiketler
   const isVehicleTag = (d: FirebaseFirestore.QueryDocumentSnapshot) => d.get('productType') === VEHICLE_PRODUCT;
@@ -130,19 +160,19 @@ export const adminOverview = onCall({ timeoutSeconds: 60, memory: '512MiB' }, as
     vehicleId: d.get('assignedVehicleId') as string | null,
     activatedMs: toMs(d.get('activatedAt')),
   }));
-  const activeBefore = active.filter((t) => t.activatedMs !== null && t.activatedMs < startMs);
+  const activeBefore = active.filter((t) => t.activatedMs !== null && t.activatedMs < cutMs);
 
   const closed = closedSnap.docs.filter(isVehicleTag).map((d) => ({
     lost: d.get('disabledReason') === 'lost',
     changedMs: toMs(d.get('updatedAtTs')),
   }));
   // Kapanma zamanı bilinmeyenler dönem başında da kapalı sayılır.
-  const closedBefore = closed.filter((t) => t.changedMs === null || t.changedMs < startMs).length;
+  const closedBefore = closed.filter((t) => t.changedMs === null || t.changedMs < cutMs).length;
 
   let tagsTotalPrev: number | null = null;
   if (hasPrev) {
     // Bileşik indeks (productType + createdAt) hazır değilse karşılaştırma boş döner.
-    tagsTotalPrev = await countOf(tags.where('createdAt', '<', startIso)).catch((e) => {
+    tagsTotalPrev = await countOf(tags.where('createdAt', '<', cutIso)).catch((e) => {
       console.warn('[overview] önceki toplam hesaplanamadı (indeks hazır olmayabilir):', e?.message);
       return null;
     });
@@ -166,32 +196,20 @@ export const adminOverview = onCall({ timeoutSeconds: 60, memory: '512MiB' }, as
     tagsActive: { value: active.length, prev: hasPrev ? activeBefore.length : null },
     tagsIdle: { value: tagsIdle, prev: hasPrev ? tagsIdlePrev : null },
     tagsClosed: { value: closed.length, prev: hasPrev ? closedBefore : null },
-    users: { value: users.length, prev: hasPrev ? users.filter((u) => Date.parse(u.metadata.creationTime) < startMs).length : null },
+    users: { value: users.length, prev: hasPrev ? users.filter((u) => Date.parse(u.metadata.creationTime) < cutMs).length : null },
     usersWithTag: { value: usersWithTag.size, prev: hasPrev ? usersWithTagBefore.size : null },
-    vehicles: { value: vehicles.length, prev: hasPrev ? vehicles.filter((v) => v.createdMs !== null && v.createdMs < startMs).length : null },
+    vehicles: { value: vehicles.length, prev: hasPrev ? vehicles.filter((v) => v.createdMs !== null && v.createdMs < cutMs).length : null },
     vehiclesWithTag: { value: vehicles.filter((v) => v.hasTag).length, prev: hasPrev ? vehiclesWithTagBefore : null },
   };
 
   // ------------------------------------------------------------- günlük seriler
-  const firstDay = hasPrev ? prevStart : start;
-  const stats = await readDailyStats(firstDay, end);
-  const indexOf = (ms: number | null): number => (ms === null ? -1 : daysBetween(firstDay, dayKey(new Date(ms))));
-  const total = daysBetween(firstDay, end) + 1;
-  const mk = () => new Array<number>(total).fill(0);
-  const series = { scans: mk(), notices: mk(), claims: mk(), newUsers: mk(), newVehicles: mk() };
-  for (let i = 0; i < total; i++) {
-    const s = stats.get(addDays(firstDay, i));
-    if (s) { series.scans[i] = s.scans; series.notices[i] = s.notices; series.claims[i] = s.claims; }
-  }
-  users.forEach((u) => {
-    const i = indexOf(Date.parse(u.metadata.creationTime));
-    if (i >= 0 && i < total) series.newUsers[i] += 1;
-  });
-  vehicles.forEach((v) => {
-    const i = indexOf(v.createdMs);
-    if (i >= 0 && i < total) series.newVehicles[i] += 1;
-  });
-  const split = (arr: number[]) => (hasPrev ? { cur: arr.slice(days), prev: arr.slice(0, days) } : { cur: arr, prev: null });
+  const userMs = users.map((u) => Date.parse(u.metadata.creationTime));
+  const vehicleMs = vehicles.map((v) => v.createdMs);
+  const [curS, prevS] = await Promise.all([
+    buildDaily(start, end, userMs, vehicleMs),
+    hasPrev ? buildDaily(prevStart, prevEnd, userMs, vehicleMs) : Promise.resolve(null),
+  ]);
+  const split = (k: Metric) => ({ cur: curS[k], prev: prevS ? prevS[k] : null });
 
   // ------------------------------------------------------------- müşteri hunisi
   const vehicleOwners = new Set(vehicles.map((v) => v.owner));
@@ -209,16 +227,18 @@ export const adminOverview = onCall({ timeoutSeconds: 60, memory: '512MiB' }, as
     withPush: cohort.filter((u) => pushOwners.has(u.uid)).length,
   };
 
-  // ------------------------------------------------------------- iller (QR bağlı araçlar)
-  const provinceCounts = new Map<string, number>();
-  vehicles.filter((v) => v.hasTag).forEach((v) => {
+  // ------------------------------------------------------------- iller (QR bağlı / bağlı olmayan araçlar)
+  const provinceMap = new Map<string, { linked: number; unlinked: number }>();
+  vehicles.forEach((v) => {
     const m = v.plate.replace(/\s+/g, '').match(/^(\d{2})/);
     const code = m && Number(m[1]) >= 1 && Number(m[1]) <= 81 ? m[1] : '??';
-    provinceCounts.set(code, (provinceCounts.get(code) || 0) + 1);
+    const row = provinceMap.get(code) || { linked: 0, unlinked: 0 };
+    if (v.hasTag) row.linked += 1; else row.unlinked += 1;
+    provinceMap.set(code, row);
   });
-  const provinces = [...provinceCounts.entries()]
-    .map(([code, count]) => ({ code, count }))
-    .sort((a, b) => b.count - a.count || a.code.localeCompare(b.code));
+  const provinces = [...provinceMap.entries()]
+    .map(([code, r]) => ({ code, ...r }))
+    .sort((x, y) => y.linked - x.linked || y.unlinked - x.unlinked || x.code.localeCompare(y.code));
 
   // ------------------------------------------------------------- dikkat gerektirenler
   const attention: Record<string, unknown>[] = [];
@@ -279,14 +299,17 @@ export const adminOverview = onCall({ timeoutSeconds: 60, memory: '512MiB' }, as
   });
 
   const data = {
-    range: { key: range, start, end, days, prevStart: hasPrev ? prevStart : null, prevEnd: hasPrev ? prevEnd : null },
+    range: {
+      key: range, start, end, days, compare: compareMode,
+      prevStart: hasPrev ? prevStart : null, prevEnd: hasPrev ? prevEnd : null,
+    },
     kpis,
     series: {
-      scans: split(series.scans),
-      notices: split(series.notices),
-      claims: split(series.claims),
-      newUsers: split(series.newUsers),
-      newVehicles: split(series.newVehicles),
+      scans: split('scans'),
+      notices: split('notices'),
+      claims: split('claims'),
+      newUsers: split('newUsers'),
+      newVehicles: split('newVehicles'),
     },
     scansSince,
     funnel,
@@ -298,4 +321,45 @@ export const adminOverview = onCall({ timeoutSeconds: 60, memory: '512MiB' }, as
   cache.set(cacheKey, { at: Date.now(), data });
   if (cache.size > 30) cache.delete(cache.keys().next().value as string);
   return data;
+});
+
+// ===========================================================================
+// Dönem karşılaştırma ekranı: seçilen her aralığın günlük değerleri
+// ===========================================================================
+
+const MAX_PERIODS = 6;
+
+export const adminPeriodSeries = onCall({ region: 'europe-west1', timeoutSeconds: 60, memory: '512MiB' }, async (req) => {
+  await requireStaff(req, ['production', 'support', 'warehouse']);
+  const raw = Array.isArray(req.data?.periods) ? req.data.periods : [];
+  if (!raw.length || raw.length > MAX_PERIODS) {
+    throw new HttpsError('invalid-argument', `1 ile ${MAX_PERIODS} arasında dönem seçilmelidir.`);
+  }
+  const today = dayKey();
+  const periods = raw.map((p: { start?: unknown; end?: unknown }) => {
+    const start = String(p?.start || '');
+    let end = String(p?.end || '');
+    if (!DAY_RE.test(start) || !DAY_RE.test(end) || start > end || start > today) {
+      throw new HttpsError('invalid-argument', 'Geçersiz tarih aralığı.');
+    }
+    if (end > today) end = today;
+    if (daysBetween(start, end) > MAX_CUSTOM_DAYS) {
+      throw new HttpsError('invalid-argument', 'Bir dönem en fazla 3 yıl olabilir.');
+    }
+    return { start, end };
+  });
+
+  await ensureBackfill();
+  const [users, vehiclesSnap, scansSince] = await Promise.all([
+    listAllUsers(),
+    db().collection('vehicles').select('createdAt').get(),
+    countersStartDay(),
+  ]);
+  const userMs = users.map((u) => Date.parse(u.metadata.creationTime));
+  const vehicleMs = vehiclesSnap.docs.map((d) => toMs(d.get('createdAt')));
+  const series = await Promise.all(periods.map((p: { start: string; end: string }) => buildDaily(p.start, p.end, userMs, vehicleMs)));
+  return {
+    periods: periods.map((p: { start: string; end: string }, i: number) => ({ ...p, series: series[i] })),
+    scansSince,
+  };
 });

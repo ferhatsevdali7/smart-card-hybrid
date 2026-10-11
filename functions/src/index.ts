@@ -17,9 +17,8 @@
  *   scan_alerts/*                    Şüpheli okutma uyarıları (istemciye kapalı)
  */
 
-import { initializeApp } from 'firebase-admin/app';
+import './setup'; // bölge ayarı: her şeyden önce yüklenmeli
 import { FieldValue, DocumentReference, Transaction } from 'firebase-admin/firestore';
-import { setGlobalOptions } from 'firebase-functions/v2';
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import {
@@ -33,10 +32,8 @@ import {
 import { sendPushToUser } from './push';
 import { bumpStat, dayKey, rollupShards } from './stats';
 
-export { adminOverview } from './overview';
+export { adminOverview, adminPeriodSeries } from './overview';
 
-initializeApp();
-setGlobalOptions({ region: 'europe-west1', maxInstances: 10 });
 
 type TagStatus = 'unclaimed' | 'active' | 'disabled' | 'expired';
 

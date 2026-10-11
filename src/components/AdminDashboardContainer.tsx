@@ -6,6 +6,7 @@ import { QrBankAdminView } from './QrBankAdminView';
 import { AdminPortalView } from './AdminPortalView';
 import { AdminSettingsView } from './admin/AdminSettingsView';
 import { AdminOverviewView } from './admin/AdminOverviewView';
+import { AdminCompareView } from './admin/AdminCompareView';
 import type { SettingsTab } from './admin/ProfileMenu';
 import { AdminLang, Icon, IconName, roleLabel, useResolvedDark } from './admin/adminUi';
 import {
@@ -136,6 +137,9 @@ export const AdminDashboardContainer: React.FC = () => {
 
       {activeSection === 'overview' && (
         <AdminOverviewView lang={lang} isDark={isDark} uid={uid} onNavigate={setActiveSection} />
+      )}
+      {activeSection === 'compare' && (
+        <AdminCompareView lang={lang} isDark={isDark} onNavigate={setActiveSection} />
       )}
       {activeSection === 'batches' && <BatchProductionView adminEmail={session.email} />}
       {activeSection === 'qr_bank' && <QrBankAdminView adminEmail={session.email} />}

@@ -43,10 +43,13 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
   useEffect(() => { setNavOpen(false); }, [p.activeSection]);
 
   const current = NAV.find((n) => n.id === p.activeSection);
-  const crumb = p.activeSection.startsWith('settings') ? L('Profil ve Ayarlar', 'Profile & Settings') : current ? L(current.tr, current.en) : '';
+  const crumb = p.activeSection.startsWith('settings') ? L('Profil ve Ayarlar', 'Profile & Settings')
+    : p.activeSection === 'compare' ? L('Dönem karşılaştırma', 'Period comparison')
+      : current ? L(current.tr, current.en) : '';
 
   const navLink = (n: (typeof NAV)[number]) => {
-    const on = p.activeSection === n.id;
+    // Dönem karşılaştırma, Genel Bakış'ın alt sayfasıdır.
+    const on = p.activeSection === n.id || (n.id === 'overview' && p.activeSection === 'compare');
     return (
       <button
         key={n.id}

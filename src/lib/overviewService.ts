@@ -4,10 +4,11 @@ import {
   addDoc, collection, deleteDoc, doc, onSnapshot, orderBy, query, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { adminOverviewFn } from './functionsClient';
+import { adminOverviewFn, adminPeriodSeriesFn } from './functionsClient';
 
 export type OverviewRange = '7d' | '30d' | '90d' | '12m' | 'all' | 'custom';
 export type OverviewMetric = 'scans' | 'notices' | 'newUsers' | 'claims' | 'newVehicles';
+export type CompareMode = 'prev' | 'yoy';
 
 export interface Kpi { value: number; prev: number | null }
 
@@ -26,7 +27,10 @@ export interface RecentEvent {
 }
 
 export interface OverviewData {
-  range: { key: OverviewRange; start: string; end: string; days: number; prevStart: string | null; prevEnd: string | null };
+  range: {
+    key: OverviewRange; start: string; end: string; days: number; compare: CompareMode;
+    prevStart: string | null; prevEnd: string | null;
+  };
   kpis: Record<
     'tagsTotal' | 'tagsActive' | 'tagsIdle' | 'tagsClosed' | 'users' | 'usersWithTag' | 'vehicles' | 'vehiclesWithTag',
     Kpi
@@ -35,14 +39,28 @@ export interface OverviewData {
   /** Okutma sayacının başladığı gün (bundan önceki okutmalar bilinmiyor) */
   scansSince: string | null;
   funnel: { registered: number; withVehicle: number; withTag: number; withPush: number };
-  provinces: { code: string; count: number }[];
+  provinces: { code: string; linked: number; unlinked: number }[];
   attention: AttentionItem[];
   recent: RecentEvent[];
   generatedAt: number;
 }
 
-export function fetchOverview(range: OverviewRange, from?: string, to?: string, fresh = false): Promise<OverviewData> {
-  return adminOverviewFn({ range, from, to, fresh });
+export function fetchOverview(
+  range: OverviewRange, compare: CompareMode, from?: string, to?: string, fresh = false,
+): Promise<OverviewData> {
+  return adminOverviewFn({ range, compare, from, to, fresh });
+}
+
+// ------------------------------------------------------------- dönem karşılaştırma
+
+export interface PeriodSeries {
+  start: string;
+  end: string;
+  series: Record<OverviewMetric, number[]>;
+}
+
+export async function fetchPeriodSeries(periods: { start: string; end: string }[]): Promise<{ periods: PeriodSeries[]; scansSince: string | null }> {
+  return adminPeriodSeriesFn({ periods });
 }
 
 // ------------------------------------------------------------- kampanya işaretleri

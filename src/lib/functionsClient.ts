@@ -30,9 +30,14 @@ export const adminSetTagStatusFn = call<
 >('adminSetTagStatus');
 
 export const adminOverviewFn = call<
-  { range: string; from?: string; to?: string; fresh?: boolean },
+  { range: string; compare?: string; from?: string; to?: string; fresh?: boolean },
   import('./overviewService').OverviewData
 >('adminOverview');
+
+export const adminPeriodSeriesFn = call<
+  { periods: { start: string; end: string }[] },
+  { periods: import('./overviewService').PeriodSeries[]; scansSince: string | null }
+>('adminPeriodSeries');
 
 /** Firebase hata nesnesinden kullanıcıya gösterilecek mesajı çıkarır. */
 export function functionErrorMessage(err: unknown, fallback = 'Bir hata oluştu. Lütfen tekrar deneyin.'): string {
