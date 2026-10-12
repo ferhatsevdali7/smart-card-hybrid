@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { requestAccountSync, syncAccountNow } from './lib/accountSyncService';
 import { 
   ShieldAlert, CreditCard, LayoutDashboard, QrCode, KeyRound, 
   Globe, Sun, Moon, LogIn, LogOut, User as UserIcon, Home, Menu, X, CarFront,
@@ -82,11 +83,15 @@ export function App() {
       setInstallPrompt(e);
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    // Ana ekrana eklenince yönetici panelindeki cihaz bilgisi güncellensin
+    const handleInstalled = () => { if (auth.currentUser && isCustomerLoggedIn()) requestAccountSync(); };
+    window.addEventListener('appinstalled', handleInstalled);
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleInstalled);
     };
   }, []);
 
@@ -94,6 +99,8 @@ export function App() {
     // SADECE son kullanıcı arayüzünden bilinçli giriş yapılmışsa müşteri oturumu aç
     if (currentUser && isCustomerLoggedIn()) {
       setUser(currentUser);
+      // Yönetici panelindeki müşteri özeti ve bu cihazın durumu (ana ekran, bildirim)
+      void syncAccountNow(true);
       // Load user's own card if available
       const userCard = await fetchUserCard(currentUser.uid);
       if (userCard) {

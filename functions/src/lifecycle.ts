@@ -18,6 +18,7 @@
 import { FieldValue, DocumentReference, Transaction } from 'firebase-admin/firestore';
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
 import { db, requireStaff, parseCode, StaffRole } from './helpers';
+import { ACCOUNT_DELETED } from './config';
 
 export type Stage = 'in_stock' | 'on_sale' | 'active' | 'disabled' | 'expired' | 'trashed';
 export const STAGES: Stage[] = ['in_stock', 'on_sale', 'active', 'disabled', 'expired', 'trashed'];
@@ -140,7 +141,13 @@ const SKIP_TEXT = {
   notFound: 'Etiket bulunamadı',
   wrongStage: 'Bu aşamadaki QR için uygun değil',
   customer: "Müşteriye bağlı QR'lar doğrudan çöpe atılamaz; önce devre dışı bırakın",
+  ownerDeleted: "Hesabı silinen müşterinin QR'ı kalıcı olarak kapalıdır",
 } as const;
+
+/** Hesabı silinen müşterinin QR'ı: etiket müşteride kaldığı için yeniden açılamaz, depoya da dönemez. */
+export function isPermanentlyClosed(tag: FirebaseFirestore.DocumentData): boolean {
+  return tag.permanentlyDisabled === true || tag.disabledReason === ACCOUNT_DELETED;
+}
 
 function planFor(action: TagAction, tag: FirebaseFirestore.DocumentData, staff: { uid: string; email: string }, note?: string): Plan | Skip {
   const stage = stageOf(tag.status);
@@ -183,11 +190,13 @@ function planFor(action: TagAction, tag: FirebaseFirestore.DocumentData, staff: 
       return to('expired', { disabledFrom: 'active', disabledReason: 'expired', disabledAt: now, disabledBy: staff.email });
     case 'enable': {
       if (stage !== 'disabled' && stage !== 'expired') return { skip: SKIP_TEXT.wrongStage };
+      if (isPermanentlyClosed(tag)) return { skip: SKIP_TEXT.ownerDeleted };
       const back: Stage = tag.assignedUserId ? 'active' : (stageOf(tag.disabledFrom) === 'on_sale' ? 'on_sale' : 'in_stock');
       return to(back, { disabledFrom: null, disabledReason: null, disabledAt: null, disabledBy: null });
     }
     case 'reset':
       if (stage !== 'active' && stage !== 'disabled' && stage !== 'expired') return { skip: SKIP_TEXT.wrongStage };
+      if (isPermanentlyClosed(tag)) return { skip: SKIP_TEXT.ownerDeleted };
       return {
         ...to('in_stock', {
           assignedUserId: null, assignedUserEmail: null, assignedVehicleId: null, assignedPlate: null,
@@ -209,6 +218,12 @@ export interface ActionResult {
   skipped: { code: string; reason: string }[];
 }
 
+/** İşlem gören QR'ların müşterileri (yönetici paneli özetleri yenilensin diye; istemciye gönderilmez). */
+const lastOwners = new WeakMap<ActionResult, Set<string>>();
+export function ownersOf(r: ActionResult): string[] {
+  return [...(lastOwners.get(r) || [])];
+}
+
 /** Birden çok etikete aynı işlemi uygular (100'lük işlem parçalarıyla). */
 export async function runTagAction(
   staff: { uid: string; email: string },
@@ -218,6 +233,8 @@ export async function runTagAction(
 ): Promise<ActionResult> {
   const result: ActionResult = { done: 0, skipped: [] };
   const batchIds = new Set<string>();
+  const owners = new Set<string>();
+  lastOwners.set(result, owners);
 
   for (let i = 0; i < codes.length; i += CHUNK) {
     const part = codes.slice(i, i + CHUNK);
@@ -247,6 +264,7 @@ export async function runTagAction(
       for (const { ref, tag, plan } of plans) {
         mergeDelta(deltas, tag.batchId, countDelta(snap(tag), plan.after));
         if (tag.batchId) batchIds.add(tag.batchId);
+        if (typeof tag.assignedUserId === 'string' && tag.assignedUserId) owners.add(tag.assignedUserId);
         if (plan.purge) {
           tx.delete(ref);
           tx.set(db().collection(TOMBSTONES).doc(ref.id), {
@@ -328,7 +346,14 @@ export const adminTagAction = onCall({ timeoutSeconds: 120 }, async (req) => {
   const codes = parseCodes(req.data?.codes);
   const note = typeof req.data?.note === 'string' ? req.data.note.trim().slice(0, 300) : undefined;
   const staff = await staffFor(req, action);
-  return runTagAction(staff, codes, action, note);
+  const result = await runTagAction(staff, codes, action, note);
+  // Müşteriye bağlı QR'larda (kapat/aç/süre/sıfırla) Kullanıcılar ve Bağlı Araçlar özetleri güncellenir.
+  const owners = ownersOf(result);
+  if (owners.length) {
+    const { refreshQuietly } = await import('./directory');
+    await refreshQuietly(owners);
+  }
+  return { done: result.done, skipped: result.skipped };
 });
 
 type BatchAction = 'release_all' | 'print_all' | 'trash';

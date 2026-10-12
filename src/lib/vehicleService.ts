@@ -7,6 +7,7 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { TagRecord, Vehicle, VehicleInput, VehicleNotice } from '../types/vehicle';
+import { requestAccountSync } from './accountSyncService';
 
 const VEHICLES = 'vehicles';
 
@@ -44,16 +45,19 @@ export async function createVehicle(uid: string, input: VehicleInput): Promise<s
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  requestAccountSync();
   return ref.id;
 }
 
 export async function updateVehicle(vehicleId: string, input: VehicleInput): Promise<void> {
   await updateDoc(doc(db, VEHICLES, vehicleId), { ...clean(input), updatedAt: serverTimestamp() });
+  requestAccountSync();
 }
 
 /** Araç silinebilmesi için önce QR etiketi ayrılmış olmalı (kural bunu zorunlu kılar). */
 export async function deleteVehicle(vehicleId: string): Promise<void> {
   await deleteDoc(doc(db, VEHICLES, vehicleId));
+  requestAccountSync();
 }
 
 export async function fetchMyTag(code: string): Promise<TagRecord | null> {

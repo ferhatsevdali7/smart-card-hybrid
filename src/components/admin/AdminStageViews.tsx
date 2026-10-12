@@ -159,7 +159,7 @@ export const AdminStandView: React.FC<BaseProps> = ({ lang, isDark, role, onOpen
                     const wait = daysSince(t.releasedAt || t.stageChangedAt);
                     return (
                       <tr key={t.code} onClick={() => setPreview(t)} className="cursor-pointer transition-colors hover:bg-[var(--a-hover)]" style={{ background: on ? 'var(--a-hover)' : undefined }}>
-                        <Td w={28}><Checkbox checked={on} onChange={(v) => sel.toggle(t.code, v)} label={t.tagId} /></Td>
+                        <Td w={28}><Checkbox checked={on} disabled={t.permanent} title={t.permanent ? L('Hesabı silinen müşterinin QR\'ı kalıcı olarak kapalıdır', 'Permanently closed') : undefined} onChange={(v) => sel.toggle(t.code, v)} label={t.tagId} /></Td>
                         <Td mono>{t.tagId}</Td>
                         <Td><BatchLink id={t.batchId} onOpen={onOpenBatch} /></Td>
                         <Td muted><span className="whitespace-nowrap">{fmtDate(t.releasedAt || t.stageChangedAt, lang)}{wait !== null && wait > 0 ? <span style={{ color: 'var(--a-faint)' }}> · {L(`${wait} gündür`, `${wait} d`)}</span> : ''}</span></Td>
@@ -273,7 +273,7 @@ export const AdminBankView: React.FC<BaseProps> = ({ lang, isDark, role, onOpenB
                     const on = sel.selected.has(t.code);
                     return (
                       <tr key={t.code} onClick={() => setPreview(t)} className="cursor-pointer transition-colors hover:bg-[var(--a-hover)]" style={{ background: on ? 'var(--a-hover)' : undefined }}>
-                        <Td w={28}><Checkbox checked={on} onChange={(v) => sel.toggle(t.code, v)} label={t.tagId} /></Td>
+                        <Td w={28}><Checkbox checked={on} disabled={t.permanent} title={t.permanent ? L('Hesabı silinen müşterinin QR\'ı kalıcı olarak kapalıdır', 'Permanently closed') : undefined} onChange={(v) => sel.toggle(t.code, v)} label={t.tagId} /></Td>
                         <Td mono>{t.tagId}</Td>
                         <Td>{t.assignedPlate ? maskPlate(t.assignedPlate) : <span className="text-[12.5px]" style={{ color: 'var(--a-faint)' }}>{L('Araca bağlı değil', 'No vehicle')}</span>}</Td>
                         <Td muted><span className="truncate inline-block max-w-[220px] align-middle">{t.assignedUserEmail || '—'}</span></Td>
@@ -356,7 +356,7 @@ const DisableDialog: React.FC<{ lang: AdminLang; count: number; onClose: () => v
 // DEVRE DIŞI
 // =====================================================================
 
-type Reason = 'all' | 'lost' | 'admin' | 'expired';
+type Reason = 'all' | 'lost' | 'admin' | 'expired' | 'deleted';
 
 export const AdminDisabledView: React.FC<BaseProps> = ({ lang, isDark, role, onOpenBatch }) => {
   const L = (tr: string, en: string) => (lang === 'tr' ? tr : en);
@@ -367,20 +367,26 @@ export const AdminDisabledView: React.FC<BaseProps> = ({ lang, isDark, role, onO
   const [preview, setPreview] = useState<LTag | null>(null);
   const a = useActions(lang);
   const list = tags || [];
-  const reasonOf = (t: LTag): Exclude<Reason, 'all'> => (t.stage === 'expired' || t.disabledReason === 'expired' ? 'expired' : t.disabledReason === 'lost' ? 'lost' : 'admin');
+  const reasonOf = (t: LTag): Exclude<Reason, 'all'> => (t.permanent ? 'deleted' : t.stage === 'expired' || t.disabledReason === 'expired' ? 'expired' : t.disabledReason === 'lost' ? 'lost' : 'admin');
   const filtered = useMemo(() => list.filter((t) => (reason === 'all' || reasonOf(t) === reason) && matchesSearch(q, t.tagId, t.code, t.assignedPlate, t.assignedUserEmail)), [list, reason, q]);
   const sorted = useMemo(() => [...filtered].sort((x, y) => (y.disabledAt?.getTime() || 0) - (x.disabledAt?.getTime() || 0)), [filtered]);
   const paged = usePaged(sorted, 50, `${reason}|${q}`);
-  const sel = useSelection(list.map((t) => t.code));
-  const selTags = list.filter((t) => sel.selected.has(t.code));
-  const pageCodes = paged.shown.map((t) => t.code);
+  // Hesabı silinen müşterinin QR'ları seçilemez (yeniden açılamaz, depoya dönemez).
+  const sel = useSelection(list.filter((t) => !t.permanent).map((t) => t.code));
+  const selTags = list.filter((t) => sel.selected.has(t.code) && !t.permanent);
+  const pageCodes = paged.shown.filter((t) => !t.permanent).map((t) => t.code);
   const n = (r: Exclude<Reason, 'all'>) => list.filter((t) => reasonOf(t) === r).length;
   const REASON: Record<Exclude<Reason, 'all'>, { label: string; color: string }> = {
     lost: { label: L('Kayıp bildirimi', 'Reported lost'), color: isDark ? '#E8776C' : '#B42318' },
     admin: { label: L('Yönetici kapattı', 'Closed by admin'), color: stageColor('disabled', isDark) },
     expired: { label: L('Süre doldu', 'Expired'), color: isDark ? '#A1A1AA' : '#71717A' },
+    deleted: { label: L('Hesap silindi', 'Account deleted'), color: isDark ? '#9D8FE8' : '#5B4BC4' },
   };
   const byWho = (t: LTag) => (reasonOf(t) === 'lost' ? L('Müşteri', 'Customer') : t.disabledBy ? t.disabledBy.split('@')[0] : L('Sistem', 'System'));
+  const kpiItems = [
+    { label: L('Toplam', 'Total'), value: nf.format(list.length) },
+    ...(['lost', 'admin', 'expired', 'deleted'] as const).map((r) => ({ label: REASON[r].label, value: nf.format(n(r)), dot: REASON[r].color })),
+  ];
 
   const enable = (target: LTag[]) => {
     const lost = target.filter((t) => reasonOf(t) === 'lost').length;
@@ -408,12 +414,7 @@ export const AdminDisabledView: React.FC<BaseProps> = ({ lang, isDark, role, onO
       {tags && (
         <>
           <section className="mt-11">
-            <Kpis items={[
-              { label: L('Toplam', 'Total'), value: nf.format(list.length) },
-              { label: REASON.lost.label, value: nf.format(n('lost')), dot: REASON.lost.color },
-              { label: REASON.admin.label, value: nf.format(n('admin')), dot: REASON.admin.color },
-              { label: REASON.expired.label, value: nf.format(n('expired')), dot: REASON.expired.color },
-            ]} />
+            <Kpis items={kpiItems} />
           </section>
           {list.length === 0 ? (
             <div className="mt-10"><EmptyState icon="ban" title={L('Devre dışı QR yok', 'No disabled QR codes')} /></div>
@@ -422,13 +423,13 @@ export const AdminDisabledView: React.FC<BaseProps> = ({ lang, isDark, role, onO
               <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4">
                 <div className="flex flex-wrap gap-0.5">
                   <FilterChip on={reason === 'all'} onClick={() => setReason('all')} count={list.length}>{L('Tümü', 'All')}</FilterChip>
-                  {(['lost', 'admin', 'expired'] as const).map((r) => <FilterChip key={r} on={reason === r} onClick={() => setReason(r)} count={n(r)} dot={REASON[r].color}>{REASON[r].label}</FilterChip>)}
+                  {(['lost', 'admin', 'expired', 'deleted'] as const).map((r) => <FilterChip key={r} on={reason === r} onClick={() => setReason(r)} count={n(r)} dot={REASON[r].color}>{REASON[r].label}</FilterChip>)}
                 </div>
                 <SearchBox value={q} onChange={setQ} placeholder={L('Seri no, plaka veya e-posta', 'Serial, plate or email')} width={280} />
               </div>
               <TableWrap minWidth={900}>
                 <thead><tr>
-                  <Th w={28}><Checkbox checked={pageCodes.length > 0 && pageCodes.every((c) => sel.selected.has(c))} indeterminate={pageCodes.some((c) => sel.selected.has(c))} onChange={(v) => sel.setAll(pageCodes, v)} label={L('Tümünü seç', 'Select all')} /></Th>
+                  <Th w={28}><Checkbox checked={pageCodes.length > 0 && pageCodes.every((c) => sel.selected.has(c))} indeterminate={pageCodes.some((c) => sel.selected.has(c))} disabled={pageCodes.length === 0} onChange={(v) => sel.setAll(pageCodes, v)} label={L('Tümünü seç', 'Select all')} /></Th>
                   <Th>{L('Seri no', 'Serial')}</Th><Th>{L('Sebep', 'Reason')}</Th><Th>{L('Araç / müşteri', 'Vehicle / customer')}</Th><Th>{L('Tarih', 'Date')}</Th><Th>{L('Kapatan', 'By')}</Th><Th w={150} />
                 </tr></thead>
                 <tbody>
@@ -437,22 +438,24 @@ export const AdminDisabledView: React.FC<BaseProps> = ({ lang, isDark, role, onO
                     const r = REASON[reasonOf(t)];
                     return (
                       <tr key={t.code} onClick={() => setPreview(t)} className="cursor-pointer transition-colors hover:bg-[var(--a-hover)]" style={{ background: on ? 'var(--a-hover)' : undefined }}>
-                        <Td w={28}><Checkbox checked={on} onChange={(v) => sel.toggle(t.code, v)} label={t.tagId} /></Td>
+                        <Td w={28}><Checkbox checked={on} disabled={t.permanent} title={t.permanent ? L('Hesabı silinen müşterinin QR\'ı kalıcı olarak kapalıdır', 'Permanently closed') : undefined} onChange={(v) => sel.toggle(t.code, v)} label={t.tagId} /></Td>
                         <Td mono>{t.tagId}</Td>
                         <Td><span className="inline-flex items-center gap-[7px] text-[12.5px] whitespace-nowrap"><i className="w-[7px] h-[7px] rounded-full" style={{ background: r.color }} />{r.label}</span></Td>
                         <Td className="h-[60px]">
-                          <div>{t.assignedPlate ? maskPlate(t.assignedPlate) : <Dash />}</div>
+                          <div>{t.permanent ? <span style={{ color: 'var(--a-faint)' }}>{L('Plaka silindi', 'Plate removed')}</span> : t.assignedPlate ? maskPlate(t.assignedPlate) : <Dash />}</div>
                           {t.assignedUserEmail && <div className="text-[12px] mt-0.5 truncate max-w-[220px]" style={{ color: 'var(--a-faint)' }}>{t.assignedUserEmail}</div>}
                         </Td>
                         <Td muted>{fmtDate(t.disabledAt, lang)}</Td>
                         <Td muted>{byWho(t)}</Td>
                         <Td w={150} right>
                           <div className="inline-flex items-center gap-1">
-                            {canDo(role, 'enable') && <Btn small icon="undo" disabled={a.busy} onClick={() => enable([t])}>{L('Yeniden aç', 'Re-enable')}</Btn>}
+                            {t.permanent
+                              ? <span className="text-[12px] whitespace-nowrap px-1" style={{ color: 'var(--a-faint)' }}>{L('Kalıcı olarak kapalı', 'Permanently closed')}</span>
+                              : canDo(role, 'enable') && <Btn small icon="undo" disabled={a.busy} onClick={() => enable([t])}>{L('Yeniden aç', 'Re-enable')}</Btn>}
                             <RowMenu label={L(`${t.tagId} işlemleri`, 'Actions')} items={[
                               { label: L('QR\'ı görüntüle', 'View QR'), icon: 'qr', onClick: () => setPreview(t) },
                               { label: L('Partiyi aç', 'Open batch'), icon: 'box', onClick: () => onOpenBatch(t.batchId) },
-                              { label: L('Depoya döndür (eşleşmeyi sil)', 'Return to stock'), icon: 'undo', danger: true, hidden: !canDo(role, 'reset'), onClick: () => reset([t]) },
+                              { label: L('Depoya döndür (eşleşmeyi sil)', 'Return to stock'), icon: 'undo', danger: true, hidden: !canDo(role, 'reset') || t.permanent, onClick: () => reset([t]) },
                             ]} />
                           </div>
                         </Td>
@@ -462,7 +465,7 @@ export const AdminDisabledView: React.FC<BaseProps> = ({ lang, isDark, role, onO
                 </tbody>
               </TableWrap>
               <PagedFooter lang={lang} total={sorted.length} shown={paged.shown.length} more={paged.more} onMore={paged.loadMore} />
-              <div className="mt-5"><Note>{L('Okutulduğunda ziyaretçi "Bu etiket kullanıma kapalı" mesajını görür. Kayıp bildirilen QR yeniden açılmadan önce müşteriye sorulması önerilir.', 'Visitors see that the QR is disabled.')}</Note></div>
+              <div className="mt-5"><Note>{L('Okutulduğunda ziyaretçi "Bu etiket kullanıma kapalı" mesajını görür. Kayıp bildirilen QR yeniden açılmadan önce müşteriye sorulması önerilir. Hesabı silinen müşterinin QR\'ları etiket müşteride kaldığı için kalıcı olarak kapalıdır; yeniden açılamaz, depoya dönemez.', 'Visitors see that the QR is disabled. QR codes of deleted accounts stay closed permanently.')}</Note></div>
             </section>
           )}
         </>

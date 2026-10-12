@@ -46,6 +46,15 @@ async function currentToken(): Promise<string | null> {
   return token || null;
 }
 
+/** Bu cihazda bildirim jetonunun kayıtlı olup olmadığı (yönetici panelindeki cihaz bilgisi için). */
+const PUSH_FLAG = 'hf_push_on';
+function setPushFlag(on: boolean): void {
+  try { if (on) localStorage.setItem(PUSH_FLAG, '1'); else localStorage.removeItem(PUSH_FLAG); } catch { /* gizli sekme */ }
+}
+export function pushRegisteredHere(): boolean {
+  try { return localStorage.getItem(PUSH_FLAG) === '1'; } catch { return false; }
+}
+
 async function saveToken(uid: string, token: string): Promise<void> {
   const id = await hashToken(token);
   await setDoc(doc(db, 'users', uid, 'push_tokens', id), {
@@ -54,6 +63,7 @@ async function saveToken(uid: string, token: string): Promise<void> {
     userAgent: navigator.userAgent.slice(0, 200),
     updatedAt: serverTimestamp(),
   });
+  setPushFlag(true);
 }
 
 /** Bu cihazdaki durumu döndürür; izin zaten verilmişse jetonu sessizce tazeler. */
@@ -95,4 +105,5 @@ export async function disablePushOnThisDevice(uid: string): Promise<void> {
   const token = await currentToken().catch(() => null);
   if (!token) return;
   await deleteDoc(doc(db, 'users', uid, 'push_tokens', await hashToken(token)));
+  setPushFlag(false);
 }

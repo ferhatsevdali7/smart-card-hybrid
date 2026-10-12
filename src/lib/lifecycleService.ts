@@ -38,9 +38,11 @@ export interface LTag {
   trashedFrom: Stage | null;
   trashedAt: Date | null;
   trashedBy: string | null;
-  disabledReason: 'lost' | 'admin' | 'expired' | null;
+  disabledReason: 'lost' | 'admin' | 'expired' | 'account_deleted' | null;
   disabledAt: Date | null;
   disabledBy: string | null;
+  /** Hesabı silinen müşterinin QR'ı: yeniden açılamaz, depoya dönemez */
+  permanent: boolean;
 }
 
 export interface BatchCounts {
@@ -106,9 +108,10 @@ function toTag(id: string, d: Record<string, unknown>): LTag {
     trashedFrom: d.trashedFrom ? normalizeStage(d.trashedFrom) : null,
     trashedAt: toDate(d.trashedAt),
     trashedBy: (d.trashedBy as string) || null,
-    disabledReason: reason === 'lost' || reason === 'admin' || reason === 'expired' ? reason : (d.status === 'expired' ? 'expired' : null),
+    disabledReason: reason === 'lost' || reason === 'admin' || reason === 'expired' || reason === 'account_deleted' ? reason : (d.status === 'expired' ? 'expired' : null),
     disabledAt: toDate(d.disabledAt) || toDate(d.updatedAtTs),
     disabledBy: (d.disabledBy as string) || null,
+    permanent: d.permanentlyDisabled === true || reason === 'account_deleted',
   };
 }
 

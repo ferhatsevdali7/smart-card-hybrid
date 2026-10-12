@@ -141,7 +141,8 @@ export type IconName =
   | 'logout' | 'globe' | 'sun' | 'moon' | 'laptop' | 'chevronDown' | 'chevronLeft' | 'chevronRight'
   | 'menu' | 'x' | 'check' | 'lock' | 'phone' | 'clock' | 'info' | 'login' | 'ban'
   | 'grid' | 'alert' | 'calendar' | 'refresh' | 'plus' | 'trash' | 'arrowUp' | 'arrowDown'
-  | 'box' | 'store' | 'print' | 'zip' | 'undo' | 'search' | 'dots' | 'download' | 'arrowRight' | 'arrowLeft';
+  | 'box' | 'store' | 'print' | 'zip' | 'undo' | 'search' | 'dots' | 'download' | 'arrowRight' | 'arrowLeft'
+  | 'bell' | 'home' | 'mail' | 'userX' | 'scan' | 'message';
 
 const PATHS: Record<IconName, React.ReactNode> = {
   layers: <><path d="m12 3 9 5-9 5-9-5 9-5z" /><path d="m3 13 9 5 9-5" /></>,
@@ -189,6 +190,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
   download: <><path d="M12 4v11M7 10l5 5 5-5" /><path d="M5 20h14" /></>,
   arrowRight: <path d="M5 12h14M13 6l6 6-6 6" />,
   arrowLeft: <path d="M19 12H5M11 6l-6 6 6 6" />,
+  bell: <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" /></>,
+  home: <><path d="M3 11 12 4l9 7" /><path d="M5 10v10h14V10" /></>,
+  mail: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="m3 7 9 6 9-6" /></>,
+  userX: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 9l5 5M21 9l-5 5" /></>,
+  scan: <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16" />,
+  message: <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />,
 };
 
 /** İki/üç seçenekli kaydırmalı seçici */

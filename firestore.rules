@@ -171,6 +171,12 @@ service cloud.firestore {
           && request.resource.data.userAgent is string
           && request.resource.data.userAgent.size() <= 200;
       }
+
+      // Bu kullanıcının cihazları (ana ekrana ekleme, bildirim izni). Yalnızca sunucu yazar.
+      match /devices/{deviceId} {
+        allow read: if signedIn() && request.auth.uid == userId;
+        allow write: if false;
+      }
     }
 
     // ------------------------------------------------------------ Şifreli kasa (sıfır bilgi)
@@ -221,6 +227,13 @@ service cloud.firestore {
     match /scan_alerts/{id}  { allow read, write: if false; }
     // Kalıcı silinmiş QR kodlarının kaydı (kod bir daha üretilmez, okutulursa "kapatılmış" görünür)
     match /tag_tombstones/{id} { allow read, write: if false; }
+    // Yönetici paneli kullanıcı/araç dizini, silinmiş hesap kayıtları ve müşteri kaydı erişim günlüğü:
+    // yalnızca sunucu okur/yazar. Yönetici bu verileri maskelenmiş halde Cloud Functions üzerinden görür
+    // (telefon numarası hiçbir zaman açık gönderilmez).
+    match /user_index/{id}       { allow read, write: if false; }
+    match /vehicle_index/{id}    { allow read, write: if false; }
+    match /deleted_accounts/{id} { allow read, write: if false; }
+    match /admin_access_log/{id} { allow read, write: if false; }
 
     // Listelenmeyen her şey kapalı.
     match /{document=**} {

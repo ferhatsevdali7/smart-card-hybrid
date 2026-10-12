@@ -910,6 +910,7 @@ const ACTION_TEXT: Record<string, { tr: string; en: string }> = {
   tags_trashed: { tr: 'QR çöpe attı', en: 'trashed QR codes' },
   tags_restored: { tr: 'QR geri yükledi', en: 'restored QR codes' },
   tags_purged: { tr: 'QR kalıcı olarak sildi', en: 'permanently deleted QR codes' },
+  account_deleted: { tr: 'hesabını sildi; QR\'ları kapatıldı', en: 'deleted their account; QR codes closed' },
 };
 
 const Recent: React.FC<{ list: RecentEvent[]; lang: AdminLang }> = ({ list, lang }) => {

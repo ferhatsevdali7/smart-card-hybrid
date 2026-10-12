@@ -51,6 +51,22 @@ export const adminPeriodSeriesFn = call<
   { periods: import('./overviewService').PeriodSeries[]; scansSince: string | null }
 >('adminPeriodSeries');
 
+// ---------------------------------------------------------------- müşteri hesabı ve yönetici dizini
+export const syncMyAccountFn = call<
+  { device?: { id: string; platform: string; label: string; standalone: boolean; push: boolean } },
+  { ok: boolean }
+>('syncMyAccount');
+export const deleteMyAccountFn = call<{ reason?: string }, { ok: boolean; vehicles: number; tags: number }>('deleteMyAccount');
+
+export const adminEnsureDirectoryFn = call<Record<string, never>, { built: boolean }>('adminEnsureDirectory');
+export const adminListUsersFn = call<{ q?: string; filter?: string; after?: string | null }, import('./directoryService').UserListResult>('adminListUsers');
+export const adminUserStatsFn = call<Record<string, never>, import('./directoryService').UserStats>('adminUserStats');
+export const adminGetUserFn = call<{ uid: string }, import('./directoryService').UserDetail>('adminGetUser');
+export const adminListDeletedAccountsFn = call<{ after?: string | null }, import('./directoryService').DeletedListResult>('adminListDeletedAccounts');
+export const adminListVehiclesFn = call<{ q?: string; filter?: string; province?: string | null; after?: string | null }, import('./directoryService').VehicleListResult>('adminListVehicles');
+export const adminVehicleStatsFn = call<Record<string, never>, import('./directoryService').VehicleStats>('adminVehicleStats');
+export const adminGetVehicleFn = call<{ vehicleId: string }, import('./directoryService').VehicleDetail>('adminGetVehicle');
+
 /** Firebase hata nesnesinden kullanıcıya gösterilecek mesajı çıkarır. */
 export function functionErrorMessage(err: unknown, fallback = 'Bir hata oluştu. Lütfen tekrar deneyin.'): string {
   const e = err as { code?: string; message?: string };

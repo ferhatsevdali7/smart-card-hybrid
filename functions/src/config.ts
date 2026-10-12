@@ -51,3 +51,6 @@ export const LIMITS = {
 } as const;
 
 export const MAX_BATCH_SIZE = 1000;
+
+/** Hesabı silinen müşterinin QR'larının devre dışı sebebi (bu QR'lar yeniden açılamaz). */
+export const ACCOUNT_DELETED = 'account_deleted';

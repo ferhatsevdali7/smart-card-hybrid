@@ -32,12 +32,18 @@ import {
   requireStaff, requireString, sanitizeNote, sha256, yearMonthIstanbul,
 } from './helpers';
 import { sendPushToUser } from './push';
-import { bumpStat, dayKey, rollupShards } from './stats';
+import { addDays, bumpStat, dayKey, rollupShards } from './stats';
 
 import { TOMBSTONES, applyTagCounts, runTagAction, snap, stageOf } from './lifecycle';
 
 export { adminOverview, adminPeriodSeries } from './overview';
 export { adminTagAction, adminBatchAction, adminEnsureLifecycle, adminRecountBatches } from './lifecycle';
+export {
+  syncMyAccount, deleteMyAccount, adminEnsureDirectory, nightlyDirectory,
+  adminListUsers, adminUserStats, adminGetUser, adminListDeletedAccounts,
+  adminListVehicles, adminVehicleStats, adminGetVehicle,
+} from './directory';
+import { refreshQuietly } from './directory';
 
 
 const tagsCol = () => db().collection('tags');
@@ -73,12 +79,20 @@ export const scanTag = onCall(async (req) => {
   // Okutma sayacı ve saatlik yoğunluk takibi; hata olursa ziyaretçiyi etkilemesin.
   const hourKey = new Date().toISOString().slice(0, 13);
   const hourCount = tag.scanHourKey === hourKey ? (Number(tag.scanHourCount) || 0) + 1 : 1;
-  tagRef.update({
+  // Günlük okutma sayısı (yönetici panelindeki son 30 gün grafiği); 40 günden eski günler silinir.
+  const today = dayKey();
+  const oldest = addDays(today, -40);
+  const scanUpdate: Record<string, unknown> = {
     scanCount: FieldValue.increment(1),
     lastScanAt: FieldValue.serverTimestamp(),
     scanHourKey: hourKey,
     scanHourCount: hourCount,
-  }).catch(() => undefined);
+    [`scanDays.${today}`]: FieldValue.increment(1),
+  };
+  Object.keys((tag.scanDays || {}) as Record<string, number>).forEach((k) => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(k) && k < oldest) scanUpdate[`scanDays.${k}`] = FieldValue.delete();
+  });
+  tagRef.update(scanUpdate).catch(() => undefined);
   if (hourCount === LIMITS.scanAlertPerHour) {
     // Kopyalanmış ya da kötüye kullanılan etiket şüphesi: Genel Bakış'ta uyarı olarak görünür.
     const alert = { code, serial: tag.tagId || null, count: hourCount, at: FieldValue.serverTimestamp() };
@@ -246,6 +260,7 @@ export const claimTag = onCall(async (req) => {
     return { result: 'OK', serial: tag.tagId || null };
   });
   if (result.result === 'OK' && firstLink) await bumpStat('claims');
+  if (result.result === 'OK') await refreshQuietly([uid]);
   return result;
 });
 
@@ -257,7 +272,7 @@ export const unlinkTag = onCall(async (req) => {
   const { uid } = requireAuth(req);
   const vehicleId = requireString(req.data?.vehicleId, 'vehicleId', 128);
 
-  return db().runTransaction(async (tx) => {
+  const out = await db().runTransaction(async (tx) => {
     const vRef = vehiclesCol().doc(vehicleId);
     const vSnap = await tx.get(vRef);
     const v = vSnap.data();
@@ -273,6 +288,8 @@ export const unlinkTag = onCall(async (req) => {
     logEvent(tx, { code: v.tagCode, action: 'unlinked', by: uid, vehicleId });
     return { result: 'OK' };
   });
+  if (out.result === 'OK') await refreshQuietly([uid]);
+  return out;
 });
 
 // ===========================================================================
@@ -284,7 +301,7 @@ export const reportTagLost = onCall(async (req) => {
   const code = parseCode(req.data?.code);
   if (!code) throw new HttpsError('invalid-argument', 'Geçersiz etiket.');
 
-  return db().runTransaction(async (tx) => {
+  const out = await db().runTransaction(async (tx) => {
     const tagRef = tagsCol().doc(code);
     const tagSnap = await tx.get(tagRef);
     const tag = tagSnap.data();
@@ -316,6 +333,8 @@ export const reportTagLost = onCall(async (req) => {
     logEvent(tx, { code, action: 'reported_lost', by: uid });
     return { result: 'OK' };
   });
+  await refreshQuietly([uid]);
+  return out;
 });
 
 // ===========================================================================

@@ -8,6 +8,8 @@ import { AdminCompareView } from './admin/AdminCompareView';
 import { AdminDepotView, sumCounts } from './admin/AdminDepotView';
 import { AdminBatchView } from './admin/AdminBatchView';
 import { AdminBankView, AdminDisabledView, AdminStandView, AdminTrashView } from './admin/AdminStageViews';
+import { AdminUsersView } from './admin/AdminUsersView';
+import { AdminVehiclesView } from './admin/AdminVehiclesView';
 import { LBatch, ensureLifecycle, listenBatches } from '../lib/lifecycleService';
 import type { SettingsTab } from './admin/ProfileMenu';
 import { AdminLang, Icon, IconName, roleLabel, useResolvedDark } from './admin/adminUi';
@@ -37,6 +39,10 @@ export const AdminDashboardContainer: React.FC = () => {
   const [batchId, setBatchId] = useState<string | null>(null);
   const [batches, setBatches] = useState<LBatch[] | null>(null);
   const [batchesError, setBatchesError] = useState(false);
+  // Kullanıcı / araç detayı (üst çubukta adı ya da plakası görünür)
+  const [userId, setUserId] = useState<string | null>(null);
+  const [vehicleId, setVehicleId] = useState<string | null>(null);
+  const [detailCrumb, setDetailCrumb] = useState<string>('');
 
   useEffect(() => onAuthStateChanged(auth, setAuthUser), []);
 
@@ -111,7 +117,14 @@ export const AdminDashboardContainer: React.FC = () => {
   const L = (tr: string, en: string) => (lang === 'tr' ? tr : en);
   // Eski bölüm adları (Genel Bakış bağlantıları vb.) yeni sayfalara yönlenir.
   const ALIASES: Record<string, string> = { batches: 'depot', qr_bank: 'bank' };
-  const go = (section: string) => { setActiveSection(ALIASES[section] || section); if (section !== 'batch') setBatchId(null); };
+  const go = (section: string) => {
+    setActiveSection(ALIASES[section] || section);
+    if (section !== 'batch') setBatchId(null);
+    setUserId(null);
+    setVehicleId(null);
+  };
+  const openUser = (uid: string, name: string) => { setActiveSection('users'); setVehicleId(null); setUserId(uid); setDetailCrumb(name); };
+  const openVehicle = (id: string, plate: string) => { setActiveSection('vehicles'); setUserId(null); setVehicleId(id); setDetailCrumb(plate); };
   const openBatch = (id: string) => { setBatchId(id); setActiveSection('batch'); };
   const totals = batches ? sumCounts(batches) : null;
   const navCounts: Record<string, number> = totals ? {
@@ -131,7 +144,8 @@ export const AdminDashboardContainer: React.FC = () => {
       activeSection={activeSection}
       onSelectSection={go}
       navCounts={navCounts}
-      crumbExtra={activeSection === 'batch' && batchId ? batchId : null}
+      crumbExtra={activeSection === 'batch' && batchId ? batchId
+        : (activeSection === 'users' && userId) || (activeSection === 'vehicles' && vehicleId) ? detailCrumb || null : null}
       onOpenSettings={openSettings}
       onLogout={handleLogout}
       lang={lang}
@@ -188,10 +202,16 @@ export const AdminDashboardContainer: React.FC = () => {
       {activeSection === 'trash' && <AdminTrashView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
 
       {activeSection === 'vehicles' && (
-        <Placeholder icon="car" title={L('Bağlı Araçlar', 'Linked Vehicles')} text={L('Araç ve etiket eşleşmeleri bu bölümde listelenecek.', 'Vehicle and tag links will be listed here.')} />
+        <AdminVehiclesView
+          lang={lang} isDark={isDark} role={role} detailId={vehicleId}
+          onOpenVehicle={openVehicle} onCloseVehicle={() => setVehicleId(null)} onOpenUser={openUser}
+        />
       )}
       {activeSection === 'users' && (
-        <Placeholder icon="users" title={L('Kullanıcılar', 'Users')} text={L('Kayıtlı müşteri hesapları bu bölümde listelenecek.', 'Customer accounts will be listed here.')} />
+        <AdminUsersView
+          lang={lang} isDark={isDark} role={role} detailUid={userId}
+          onOpenUser={openUser} onCloseUser={() => setUserId(null)} onOpenVehicle={openVehicle}
+        />
       )}
       {activeSection === 'audit' && (
         <Placeholder icon="shield" title={L('Denetim Kayıtları', 'Audit Logs')} text={L('Tüm yöneticilerin işlem kayıtları bu bölümde listelenecek. Kendi işlemleriniz için Profil ve Ayarlar › Hesap etkinliğim bölümüne bakın.', 'All admins\' actions will be listed here. For your own, see Profile & Settings › My activity.')} />

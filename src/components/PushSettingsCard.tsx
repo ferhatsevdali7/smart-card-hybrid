@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BellRing, BellOff, Loader2, CheckCircle2, Share, Send } from 'lucide-react';
 import { PushState, disablePushOnThisDevice, enablePush, getPushState } from '../lib/pushService';
+import { requestAccountSync } from '../lib/accountSyncService';
 import { functionErrorMessage, sendTestPushFn } from '../lib/functionsClient';
 
 /**
@@ -23,6 +24,7 @@ export const PushSettingsCard: React.FC<{ uid: string; isDark: boolean }> = ({ u
     try {
       const s = await enablePush(uid);
       setState(s);
+      requestAccountSync();
       if (s === 'on') setMsg({ text: 'Bildirimler bu cihazda açıldı.', ok: true });
       if (s === 'denied') setMsg({ text: 'Bildirim izni verilmedi.', ok: false });
     } catch {
@@ -37,6 +39,7 @@ export const PushSettingsCard: React.FC<{ uid: string; isDark: boolean }> = ({ u
     try {
       await disablePushOnThisDevice(uid);
       setState('off');
+      requestAccountSync();
       setMsg({ text: 'Bu cihaza artık bildirim gönderilmeyecek.', ok: true });
     } catch {
       setMsg({ text: 'İşlem tamamlanamadı.', ok: false });
