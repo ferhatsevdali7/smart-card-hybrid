@@ -186,7 +186,18 @@ service cloud.firestore {
     match /staff_positions/{id}      { allow read, write: if false; }
     match /critical_usage/{id}       { allow read, write: if false; }
     match /critical_overrides/{id}   { allow read, write: if false; }
-    match /admin_notifications/{id}  { allow read, write: if false; }
+    match /admin_notifications/{id}  { allow read, write: if false; } // eski (kullanılmıyor)
+    match /admin_sends/{id}          { allow read, write: if false; }
+
+    // ------------------------------------------------------------ Bildirimler
+    // Herkes yalnızca kendi kutusunu okur (askıdaki/çıkarılan üye okuyamaz). Yazma yalnızca sunucudan.
+    match /admin_inbox/{owner} {
+      allow read, write: if false;
+      match /inbox_items/{id} {
+        allow read: if isStaff() && owner == myEmail();
+        allow write: if false;
+      }
+    }
     match /admin_audit/{id}          { allow read, write: if false; }
 
     // ------------------------------------------------------------ Kullanıcı profili

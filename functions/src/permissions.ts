@@ -5,7 +5,7 @@
  *   staff_members/{email}   Ekip üyesi { positionId, perms[] (pozisyondan kopya), status, ... }
  *   critical_usage/{id}     Kişinin o günkü kritik işlem sayısı (yalnızca sunucu)
  *   critical_overrides/{id} Süper yöneticinin o gün için kaldırdığı kısıtlar (yalnızca sunucu)
- *   admin_notifications/{id} Süper yöneticilere bildirimler (bildirim düğmesi)
+ *   admin_inbox/{email}/inbox_items  Bildirimler (bkz. inbox.ts)
  *   admin_audit/{id}        Ekip ve yetki değişiklikleri, kritik işlemler (Denetim Kayıtları)
  *
  * Kurallar:
@@ -21,6 +21,7 @@ import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
 import { SUPER_ADMIN_EMAILS } from './config';
 import { db, requireAuth, sha256 } from './helpers';
 import { dayKey } from './stats';
+import { notify } from './inbox';
 
 // ---------------------------------------------------------------------------
 // Yetki listesi (arayüzdeki gruplu tablo ile aynı sıra)
@@ -226,7 +227,7 @@ export function requireReason(input: unknown): string {
 export type CriticalKind = keyof typeof DAILY_LIMITS;
 
 const usageId = (email: string, day = dayKey()) => `${day}_${sha256(email).slice(0, 20)}`;
-const overrideId = (email: string, kind: CriticalKind, day = dayKey()) => `${day}_${kind}_${sha256(email).slice(0, 20)}`;
+export const overrideId = (email: string, kind: CriticalKind, day = dayKey()) => `${day}_${kind}_${sha256(email).slice(0, 20)}`;
 
 export interface Quota { used: number; limit: number | null; remaining: number | null; lifted: boolean }
 
@@ -273,34 +274,32 @@ export async function reserveQuota(a: StaffAccess, kind: CriticalKind, n: number
 }
 
 async function notifyLimit(a: StaffAccess, kind: CriticalKind, used: number, limit: number): Promise<void> {
-  // Aynı kişi + işlem için günde tek bildirim
-  const id = `limit_${overrideId(a.email, kind)}`;
-  const ref = db().collection('admin_notifications').doc(id);
-  try {
-    await ref.create({
-      kind: 'limit_reached',
-      action: kind,
-      actorEmail: a.email,
-      actorName: a.name || a.email.split('@')[0],
-      used: Math.min(used, limit),
-      limit,
-      day: dayKey(),
-      resolved: false,
-      readBy: [],
-      createdAt: FieldValue.serverTimestamp(),
-    });
-  } catch {
-    /* zaten bildirilmiş */
-  }
+  // Aynı kişi + işlem için günde tek bildirim (her süper yöneticinin kutusunda aynı kimlikle)
+  const name = a.name || a.email.split('@')[0];
+  await notify('limit_reached', {
+    docId: `limit_${overrideId(a.email, kind)}`,
+    title: `${name} günlük ${kind === 'purge' ? 'kalıcı QR silme' : 'müşteri hesabı silme'} sınırına ulaştı`,
+    actorEmail: a.email,
+    actorName: name,
+    link: { section: 'team', id: a.email },
+    data: { action: kind, targetEmail: a.email, used: Math.min(used, limit), limit },
+  });
 }
 
-/** Süper yöneticiye kritik işlem bildirimi + denetim kaydı */
+/** Kritik işlem: denetim kaydı + süper yöneticilere bildirim */
 export async function recordCritical(a: StaffAccess, action: string, data: Record<string, unknown>): Promise<void> {
-  const base = { action, actorEmail: a.email, actorUid: a.uid, actorName: a.name || a.email.split('@')[0], superAdmin: a.superAdmin, ...data };
-  await Promise.all([
-    db().collection('admin_audit').add({ ...base, at: FieldValue.serverTimestamp() }),
-    db().collection('admin_notifications').add({ kind: 'critical', ...base, readBy: [], createdAt: FieldValue.serverTimestamp() }),
-  ]);
+  const actorName = a.name || a.email.split('@')[0];
+  const base = { action, actorEmail: a.email, actorUid: a.uid, actorName, superAdmin: a.superAdmin, ...data };
+  await db().collection('admin_audit').add({ ...base, at: FieldValue.serverTimestamp() });
+  const isPurge = action === 'qr_purged';
+  await notify('critical', {
+    title: isPurge ? `${actorName} ${Number(data.count) || 0} QR'ı kalıcı olarak sildi` : `${actorName} bir müşteri hesabını sildi`,
+    body: typeof data.reason === 'string' ? data.reason : '',
+    actorEmail: a.email,
+    actorName,
+    link: isPurge ? { section: 'audit' } : { section: 'users', tab: 'deleted' },
+    data: { action, ...data },
+  });
 }
 
 export async function audit(a: { uid: string; email: string }, action: string, data: Record<string, unknown>): Promise<void> {

@@ -81,6 +81,13 @@ export const adminLiftLimitFn = call<{ email: string; kind: 'user_delete' | 'pur
 export const adminMyQuotaFn = call<{ kind: 'user_delete' | 'purge' }, { used: number; limit: number | null; remaining: number | null; lifted: boolean }>('adminMyQuota');
 export const adminDeleteUserFn = call<{ uid: string; reason: string }, { ok: boolean; vehicles: number; tags: number }>('adminDeleteUser');
 
+// Bildirimler
+export const adminInboxMarkReadFn = call<Record<string, never>, { marked: number; more: boolean }>('adminInboxMarkRead');
+export const adminInboxClearFn = call<{ ids?: string[] }, { removed: number; kept: { unread: number; task: number; limit: number } }>('adminInboxClear');
+export const adminInboxTaskDoneFn = call<{ id: string }, { ok: boolean; already: boolean }>('adminInboxTaskDone');
+export const adminSendNotificationFn = call<import('./notificationService').SendInput, { ok: boolean; sendId: string; count: number }>('adminSendNotification');
+export const adminListSentFn = call<{ before?: number | null }, { items: import('./notificationService').SentItem[]; next: number | null }>('adminListSent');
+
 /** Firebase hata nesnesinden kullanıcıya gösterilecek mesajı çıkarır. */
 export function functionErrorMessage(err: unknown, fallback = 'Bir hata oluştu. Lütfen tekrar deneyin.'): string {
   const e = err as { code?: string; message?: string };

@@ -22,6 +22,8 @@ interface Props {
   onOpenUser: (uid: string, name: string) => void;
   onCloseUser: () => void;
   onOpenVehicle: (vehicleId: string, plate: string) => void;
+  /** Bildirimden gelindiğinde açılacak sekme */
+  initialTab?: 'accounts' | 'deleted';
 }
 
 export const AdminUsersView: React.FC<Props> = (p) => {
@@ -51,11 +53,11 @@ export const AdminUsersView: React.FC<Props> = (p) => {
 // LİSTE
 // =====================================================================
 
-const UsersList: React.FC<Props & { version: number }> = ({ lang, onOpenUser, version }) => {
+const UsersList: React.FC<Props & { version: number }> = ({ lang, onOpenUser, version, initialTab }) => {
   const L = (tr: string, en: string) => (lang === 'tr' ? tr : en);
   const nf = nfFor(lang);
   const [ready, setReady] = useState(false);
-  const [tab, setTab] = useState<'accounts' | 'deleted'>('accounts');
+  const [tab, setTab] = useState<'accounts' | 'deleted'>(initialTab || 'accounts');
   const [q, setQ] = useState('');
   const dq = useDebounced(q.trim(), 350);
   const [filter, setFilter] = useState<UserFilter>('all');

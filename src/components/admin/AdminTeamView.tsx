@@ -15,21 +15,28 @@ import {
 } from '../../lib/teamService';
 import { initials } from '../../lib/directoryService';
 
-interface Props { lang: AdminLang; isDark: boolean; onCrumb: (text: string | null) => void }
+interface Props {
+  lang: AdminLang; isDark: boolean; onCrumb: (text: string | null) => void;
+  /** Bildirimden gelindiğinde doğrudan açılacak üye */
+  openMember?: string | null;
+}
 
 type View = { kind: 'list' } | { kind: 'member'; email: string } | { kind: 'position'; id: string | null };
 
-export const AdminTeamView: React.FC<Props> = ({ lang, isDark, onCrumb }) => {
+export const AdminTeamView: React.FC<Props> = ({ lang, isDark, onCrumb, openMember }) => {
   const L = (tr: string, en: string) => (lang === 'tr' ? tr : en);
   const access = useAccess();
   const [tab, setTab] = useState<'members' | 'positions'>('members');
-  const [view, setView] = useState<View>({ kind: 'list' });
+  const [view, setView] = useState<View>(() => (openMember ? { kind: 'member', email: openMember } : { kind: 'list' }));
   const [version, setVersion] = useState(0);
   const toasts = useToasts();
   const data = useRemote(() => (access.superAdmin ? teamOverview() : Promise.resolve(null)), `team|${version}|${access.superAdmin}`);
   const refresh = () => setVersion((v) => v + 1);
 
   useEffect(() => { if (view.kind === 'list') onCrumb(tab === 'positions' ? L('Pozisyonlar', 'Positions') : null); }, [view.kind, tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Bildirimden üyeye gelindiyse üst çubukta adı (yüklenince) görünür
+  const openedName = data.data?.members.find((m) => m.email === openMember)?.name;
+  useEffect(() => { if (openMember && view.kind === 'member' && view.email === openMember) onCrumb(openedName || openMember); }, [openedName]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!access.superAdmin) return <NoAccess lang={lang} title={L('Ekip ve Yetkiler', 'Team & Permissions')} note={L('Bu sayfayı yalnızca süper yöneticiler görebilir.', 'Only super admins can see this page.')} />;
 

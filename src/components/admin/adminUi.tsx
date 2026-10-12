@@ -142,7 +142,7 @@ export type IconName =
   | 'menu' | 'x' | 'check' | 'lock' | 'phone' | 'clock' | 'info' | 'login' | 'ban'
   | 'grid' | 'alert' | 'calendar' | 'refresh' | 'plus' | 'trash' | 'arrowUp' | 'arrowDown'
   | 'box' | 'store' | 'print' | 'zip' | 'undo' | 'search' | 'dots' | 'download' | 'arrowRight' | 'arrowLeft'
-  | 'bell' | 'home' | 'mail' | 'userX' | 'scan' | 'message';
+  | 'bell' | 'home' | 'mail' | 'userX' | 'scan' | 'message' | 'send' | 'task' | 'broom';
 
 const PATHS: Record<IconName, React.ReactNode> = {
   layers: <><path d="m12 3 9 5-9 5-9-5 9-5z" /><path d="m3 13 9 5 9-5" /></>,
@@ -196,6 +196,9 @@ const PATHS: Record<IconName, React.ReactNode> = {
   userX: <><circle cx="9" cy="8" r="3.5" /><path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 9l5 5M21 9l-5 5" /></>,
   scan: <path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16" />,
   message: <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />,
+  send: <><path d="M21 3 10 14" /><path d="M21 3 14 21l-4-7-7-4z" /></>,
+  task: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="m8.5 12 2.5 2.5 4.5-5" /></>,
+  broom: <><path d="M4 20h16" /><path d="M7 20l2-7h6l2 7" /><path d="M12 13V3" /></>,
 };
 
 /** İki/üç seçenekli kaydırmalı seçici */

@@ -14,8 +14,9 @@ import { SUPER_ADMIN_EMAILS } from './config';
 import { db, rateLimit, requireAuth } from './helpers';
 import {
   BUILTIN_POSITIONS, CRITICAL, DAILY_LIMITS, MEMBERS, POSITIONS, audit, ensureTeamSeeded, getAccess, getQuota,
-  isSuperAdminEmail, normalizePerms, requireAnyStaff, requireSuperAdmin, tsMs, CriticalKind,
+  isSuperAdminEmail, normalizePerms, overrideId, requireAnyStaff, requireSuperAdmin, tsMs, CriticalKind,
 } from './permissions';
+import { clearInboxOf, resolveEverywhere } from './inbox';
 import { dayKey } from './stats';
 import { sha256 } from './helpers';
 
@@ -267,6 +268,8 @@ export const adminTeamRemoveMember = onCall(async (req) => {
   const x = snap.data()!;
   await ref.delete();
   const closed = await revokeSessions(email, await uidOfEmail(email, x.uid));
+  // Ekipten çıkan kişinin bildirim kutusu boşaltılır (yeniden eklenirse eski bildirimleri görmesin)
+  await clearInboxOf(email).catch((e) => console.error('[inbox] kutu boşaltılamadı', e));
   await audit(a, 'team_member_removed', { targetEmail: email, positionId: x.positionId || null, closedSessions: closed });
   return { ok: true, closedSessions: closed };
 });
@@ -341,9 +344,9 @@ export const adminLiftLimit = onCall(async (req) => {
   const kind = req.data?.kind as CriticalKind;
   if (!Object.prototype.hasOwnProperty.call(DAILY_LIMITS, kind)) throw new HttpsError('invalid-argument', 'Geçersiz işlem türü.');
   const day = dayKey();
-  const id = `${day}_${kind}_${sha256(email).slice(0, 20)}`;
+  const id = overrideId(email, kind, day);
   await db().collection('critical_overrides').doc(id).set({ email, kind, day, liftedBy: a.email, at: FieldValue.serverTimestamp() });
-  await db().collection('admin_notifications').doc(`limit_${id}`).set({ resolved: true, resolvedBy: a.email, resolvedAt: FieldValue.serverTimestamp() }, { merge: true });
+  await resolveEverywhere(`limit_${id}`, a.email).catch((e) => console.error('[inbox] sınır bildirimi güncellenemedi', e));
   await audit(a, 'critical_limit_lifted', { targetEmail: email, kind, day });
   return { ok: true };
 });

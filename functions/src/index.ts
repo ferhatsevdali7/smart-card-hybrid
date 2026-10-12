@@ -47,8 +47,12 @@ export {
   staffSignIn, adminTeamOverview, adminTeamMember, adminTeamAddMember, adminTeamUpdateMember, adminTeamRemoveMember,
   adminTeamRevokeSessions, adminTeamSavePosition, adminTeamDeletePosition, adminLiftLimit, adminMyQuota,
 } from './team';
+export {
+  adminInboxMarkRead, adminInboxClear, adminInboxTaskDone, adminSendNotification, adminListSent, nightlyInboxCleanup,
+} from './notifications';
 import { refreshQuietly } from './directory';
 import { requirePerm } from './permissions';
+import { notify } from './inbox';
 
 
 const tagsCol = () => db().collection('tags');
@@ -336,10 +340,18 @@ export const reportTagLost = onCall(async (req) => {
     });
     if (vRef) tx.update(vRef, { tagCode: null, tagSerial: null, updatedAt: FieldValue.serverTimestamp() });
     logEvent(tx, { code, action: 'reported_lost', by: uid });
-    return { result: 'OK' };
+    return { result: 'OK', lost: { serial: String(tag.tagId || ''), batchId: String(tag.batchId || '') } };
   });
   await refreshQuietly([uid]);
-  return out;
+  if ('lost' in out && out.lost) {
+    await notify('tag_lost', {
+      title: "Bir müşteri QR'ını kayıp bildirdi",
+      actorName: 'Müşteri',
+      link: { section: 'disabled' },
+      data: out.lost,
+    });
+  }
+  return { result: out.result };
 });
 
 // ===========================================================================
@@ -458,6 +470,14 @@ export const adminCreateBatch = onCall({ timeoutSeconds: 120 }, async (req) => {
 
   await db().collection('tag_events').add({
     action: 'batch_created', batchId, count, by: staff.uid, byEmail: staff.email, at: FieldValue.serverTimestamp(),
+  });
+  const actorName = staff.name || staff.email.split('@')[0];
+  await notify('batch_created', {
+    title: `Yeni parti üretildi: ${batchId}`,
+    actorEmail: staff.email,
+    actorName,
+    link: { section: 'batch', id: batchId },
+    data: { batchId, count },
   });
   return { batchId, count };
 });

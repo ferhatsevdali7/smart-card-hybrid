@@ -11,6 +11,8 @@ import { AdminBankView, AdminDisabledView, AdminStandView, AdminTrashView } from
 import { AdminUsersView } from './admin/AdminUsersView';
 import { AdminVehiclesView } from './admin/AdminVehiclesView';
 import { AdminTeamView } from './admin/AdminTeamView';
+import { AdminNotificationsView } from './admin/AdminNotificationsView';
+import type { NoteLink } from '../lib/notificationService';
 import { NoAccess } from './admin/customerUi';
 import { canSee, clearAccess, getAccess, seesTags, setAccess, useAccess } from '../lib/access';
 import { fetchStaffAccess } from '../lib/staffAuthService';
@@ -50,6 +52,8 @@ export const AdminDashboardContainer: React.FC = () => {
   const [userId, setUserId] = useState<string | null>(null);
   const [vehicleId, setVehicleId] = useState<string | null>(null);
   const [detailCrumb, setDetailCrumb] = useState<string>('');
+  // Bildirimden gelinen hedef (ekip üyesi / kullanıcılar sekmesi); her geçişte sayfa baştan açılır
+  const [deepLink, setDeepLink] = useState<{ team?: string | null; usersTab?: 'accounts' | 'deleted'; n: number }>({ n: 0 });
 
   useEffect(() => onAuthStateChanged(auth, setAuthUser), []);
 
@@ -165,6 +169,14 @@ export const AdminDashboardContainer: React.FC = () => {
     if (section !== 'batch') setBatchId(null);
     setUserId(null);
     setVehicleId(null);
+    setDeepLink((d) => ({ n: d.n + 1 }));
+  };
+  // Bildirimdeki "İlgili sayfaya git" düğmesi
+  const openLink = (l: NoteLink) => {
+    if (l.section === 'batch' && l.id) { go('batch'); setBatchId(l.id); return; }
+    go(l.section);
+    if (l.section === 'team' && l.id) { setDetailCrumb(l.id); setDeepLink((d) => ({ team: l.id, n: d.n + 1 })); }
+    if (l.section === 'users' && l.tab === 'deleted') setDeepLink((d) => ({ usersTab: 'deleted', n: d.n + 1 }));
   };
   const openUser = (uid: string, name: string) => { setActiveSection('users'); setVehicleId(null); setUserId(uid); setDetailCrumb(name); };
   const openVehicle = (id: string, plate: string) => { setActiveSection('vehicles'); setUserId(null); setVehicleId(id); setDetailCrumb(plate); };
@@ -231,7 +243,7 @@ export const AdminDashboardContainer: React.FC = () => {
         <p className="p-8 text-sm" style={{ color: 'var(--a-muted)' }}>{L('Yetkiler yükleniyor…', 'Loading permissions…')}</p>
       )}
       {activeSection === 'team' && access.loaded && canSee('team') && (
-        <AdminTeamView lang={lang} isDark={isDark} onCrumb={(t) => setDetailCrumb(t || '')} />
+        <AdminTeamView key={`team-${deepLink.n}`} lang={lang} isDark={isDark} openMember={deepLink.team || null} onCrumb={(t) => setDetailCrumb(t || '')} />
       )}
       {allowed && activeSection === 'overview' && (
         <AdminOverviewView lang={lang} isDark={isDark} uid={uid} onNavigate={go} />
@@ -262,9 +274,14 @@ export const AdminDashboardContainer: React.FC = () => {
       )}
       {allowed && activeSection === 'users' && (
         <AdminUsersView
+          key={`users-${deepLink.usersTab || 'accounts'}-${deepLink.usersTab ? deepLink.n : 0}`}
+          initialTab={deepLink.usersTab}
           lang={lang} isDark={isDark} role={role} detailUid={userId}
           onOpenUser={openUser} onCloseUser={() => setUserId(null)} onOpenVehicle={openVehicle}
         />
+      )}
+      {access.loaded && activeSection === 'notifications' && (
+        <AdminNotificationsView lang={lang} isDark={isDark} email={session.email} onNavigate={openLink} />
       )}
       {allowed && activeSection === 'audit' && (
         <Placeholder icon="shield" title={L('Denetim Kayıtları', 'Audit Logs')} text={L('Tüm yöneticilerin işlem kayıtları bu bölümde listelenecek. Kendi işlemleriniz için Profil ve Ayarlar › Hesap etkinliğim bölümüne bakın.', 'All admins\' actions will be listed here. For your own, see Profile & Settings › My activity.')} />

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AdminSession, AdminThemePref } from '../lib/adminSessionService';
 import { AdminLang, Avatar, Icon, IconName, roleLabel, themeVars, useAdminFonts } from './admin/adminUi';
 import { ProfileMenu, SettingsTab } from './admin/ProfileMenu';
 import { canSee, useAccess } from '../lib/access';
+import { listenUnread, noteSummary, type InboxItem } from '../lib/notificationService';
 
 interface AdminLayoutProps {
   session: AdminSession;
@@ -58,8 +59,41 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
 
   useEffect(() => { setNavOpen(false); }, [p.activeSection]);
 
+  // Zil: okunmamış bildirim sayısı (canlı). Başka sayfadayken yeni bildirim gelirse kısa bir uyarı çıkar.
+  const [unread, setUnread] = useState<InboxItem[] | null>(null);
+  const [popup, setPopup] = useState<InboxItem | null>(null);
+  const seen = useRef<Set<string> | null>(null);
+  const onNotifications = p.activeSection === 'notifications';
+  const onNotificationsRef = useRef(onNotifications);
+  onNotificationsRef.current = onNotifications;
+  useEffect(() => {
+    if (!access.loaded) return;
+    seen.current = null;
+    return listenUnread(
+      p.session.email,
+      (list) => {
+        const prev = seen.current;
+        seen.current = new Set(list.map((i) => i.id));
+        setUnread(list);
+        if (!prev || onNotificationsRef.current) return;
+        const fresh = list.find((i) => !prev.has(i.id));
+        if (fresh) setPopup(fresh);
+      },
+      () => setUnread(null),
+    );
+  }, [access.loaded, p.session.email]);
+  useEffect(() => {
+    if (!popup) return;
+    const t = setTimeout(() => setPopup(null), 8000);
+    return () => clearTimeout(t);
+  }, [popup]);
+  useEffect(() => { if (onNotifications) setPopup(null); }, [onNotifications]);
+  const unreadCount = unread?.length || 0;
+  const badge = unreadCount > 99 ? '99+' : String(unreadCount);
+
   const current = NAV.find((n) => n.id === (PARENT[p.activeSection] || p.activeSection));
   const crumb = p.activeSection.startsWith('settings') ? L('Profil ve Ayarlar', 'Profile & Settings')
+    : onNotifications ? L('Bildirimler', 'Notifications')
     : p.activeSection === 'compare' ? L('Dönem karşılaştırma', 'Period comparison')
       : current ? `${L(current.tr, current.en)}${p.crumbExtra ? ` / ${p.crumbExtra}` : ''}` : '';
 
@@ -116,6 +150,30 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
           <span className="text-[13px] truncate" style={{ color: 'var(--a-muted)' }}>{crumb}</span>
         </div>
 
+        <div className="flex items-center gap-1.5 sm:gap-2.5">
+        {access.loaded && (
+          <button
+            type="button"
+            onClick={() => p.onSelectSection('notifications')}
+            aria-label={unreadCount ? L(`Bildirimler, ${badge} okunmamış`, `Notifications, ${badge} unread`) : L('Bildirimler', 'Notifications')}
+            aria-current={onNotifications ? 'page' : undefined}
+            title={L('Bildirimler', 'Notifications')}
+            className="relative w-10 h-10 rounded-[10px] flex items-center justify-center transition-colors hover:bg-[var(--a-hover)]"
+            style={{ background: onNotifications ? 'var(--a-active)' : undefined, color: onNotifications ? 'var(--a-text)' : 'var(--a-text2)' }}
+          >
+            <Icon name="bell" size={19} />
+            {unreadCount > 0 && (
+              <span
+                data-testid="bell-badge"
+                className="absolute top-[5px] left-[21px] min-w-[18px] h-[18px] px-[5px] rounded-full flex items-center justify-center text-[10.5px] font-semibold text-white box-border"
+                style={{ background: '#E5484D', border: '2px solid var(--a-panel)', lineHeight: 1 }}
+              >
+                {badge}
+              </span>
+            )}
+          </button>
+        )}
+        <span className="hidden sm:block w-px h-6" style={{ background: 'var(--a-line)' }} />
         <div className="relative">
           <button
             type="button"
@@ -152,7 +210,21 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
             onLogout={() => setShowLogoutConfirm(true)}
           />
         </div>
+        </div>
       </header>
+
+      {/* YENİ BİLDİRİM UYARISI (Bildirimler sayfası dışındayken) */}
+      {popup && !onNotifications && (
+        <div className="fixed z-[75] right-4 top-[68px] left-4 sm:left-auto sm:w-[380px] flex gap-3 px-4 py-3.5 rounded-xl" role="status" aria-live="polite" style={{ background: 'var(--a-raised)', border: '1px solid var(--a-line3)', boxShadow: 'var(--a-shadow)' }}>
+          <span className="w-8 h-8 rounded-[9px] flex items-center justify-center shrink-0" style={{ background: 'var(--a-accent-tint)', color: 'var(--a-accent)' }}><Icon name={popup.kind === 'task' ? 'task' : 'bell'} size={16} /></span>
+          <div className="flex-1 min-w-0">
+            <div className="text-[13px] leading-snug break-words">{noteSummary(popup, L)}</div>
+            {(popup.kind === 'task' || popup.kind === 'message') && <div className="text-[12.5px] mt-0.5 truncate" style={{ color: 'var(--a-muted)' }}>{popup.title}</div>}
+            <button type="button" onClick={() => { setPopup(null); p.onSelectSection('notifications'); }} className="mt-2 text-[12.5px] underline underline-offset-4" style={{ color: 'var(--a-text2)', textDecorationColor: 'var(--a-line3)' }}>{L('Bildirimlere git', 'Open notifications')}</button>
+          </div>
+          <button type="button" onClick={() => setPopup(null)} aria-label={L('Kapat', 'Close')} className="w-7 h-7 -mr-1 -mt-1 rounded-md flex items-center justify-center shrink-0 hover:bg-[var(--a-hover)]" style={{ color: 'var(--a-faint)' }}><Icon name="x" size={14} /></button>
+        </div>
+      )}
 
       <div className="flex-1 flex min-h-0">
         {!p.hideSidebar && (
