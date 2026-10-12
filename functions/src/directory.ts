@@ -414,6 +414,9 @@ export async function deleteAccountData(uid: string, input: DeleteInput): Promis
   await db().collection('vaults').doc(uid).delete();
   for (const c of cardsSnap.docs) await c.ref.delete();
 
+  // 3b) Destek talepleri, yazışmaları ve görselleri
+  try { const { deleteTicketsOf } = await import('./tickets'); await deleteTicketsOf(uid); } catch (e) { logger.error('[directory] talepler silinemedi', e); }
+
   // 4) Asgari kayıt (aynı hesap için tek kayıt: kimliğin özeti belge adı olur)
   const recId = sha256(`deleted:${uid}`).slice(0, 28);
   const recRef = db().collection(DELETED).doc(recId);

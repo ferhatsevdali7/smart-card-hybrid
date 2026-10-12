@@ -88,6 +88,27 @@ export const adminInboxTaskDoneFn = call<{ id: string }, { ok: boolean; already:
 export const adminSendNotificationFn = call<import('./notificationService').SendInput, { ok: boolean; sendId: string; count: number }>('adminSendNotification');
 export const adminListSentFn = call<{ before?: number | null }, { items: import('./notificationService').SentItem[]; next: number | null }>('adminListSent');
 
+// Destek talepleri
+export const ticketUploadFileFn = call<{ data: string; thumb: string; w: number; h: number }, { id: string }>('ticketUploadFile');
+export const ticketCreateFn = call<import('./ticketService').CreateInput, { id: string; no: string }>('ticketCreate');
+export const ticketReplyFn = call<{ ticketId: string; body: string; attachments?: string[] }, { ok: boolean; status: string }>('ticketReply');
+export const ticketReopenFn = call<{ ticketId: string }, { ok: boolean }>('ticketReopen');
+export const ticketRateFn = call<{ ticketId: string; score: number; comment?: string }, { ok: boolean }>('ticketRate');
+export const ticketMarkReadFn = call<{ ticketId: string }, { ok: boolean }>('ticketMarkRead');
+export const reportAbuseFn = call<{ code: string; reason: string; note?: string }, { ok: boolean }>('reportAbuse');
+export const adminListTicketsFn = call<import('./ticketService').ListInput, import('./ticketService').ListResult>('adminListTickets');
+export const adminGetTicketFn = call<{ id: string }, import('./ticketService').TicketDetail>('adminGetTicket');
+export const adminTicketStaffFn = call<Record<string, never>, { staff: import('./ticketService').StaffOption[] }>('adminTicketStaff');
+export const adminTicketReplyFn = call<{ id: string; body: string; internal?: boolean; nextStatus?: string; attachments?: string[]; templateId?: string }, { ok: boolean; status: string }>('adminTicketReply');
+export const adminTicketUpdateFn = call<{ id: string; status?: string; assigneeEmail?: string | null; priority?: string }, { ok: boolean; changed: boolean }>('adminTicketUpdate');
+export const adminTicketFileFn = call<{ id: string }, { data: string; w: number; h: number }>('adminTicketFile');
+export const adminListTemplatesFn = call<Record<string, never>, { templates: import('./ticketService').Template[] }>('adminListTemplates');
+export const adminSaveTemplateFn = call<{ id?: string; title: string; body: string }, { ok: boolean; id: string }>('adminSaveTemplate');
+export const adminDeleteTemplateFn = call<{ id: string }, { ok: boolean }>('adminDeleteTemplate');
+export const adminListAbuseFn = call<{ status?: 'new' | 'reviewed' }, import('./ticketService').AbuseList>('adminListAbuse');
+export const adminAbuseReviewFn = call<{ id: string }, { ok: boolean }>('adminAbuseReview');
+export const adminAbuseDisableFn = call<{ id: string }, { ok: boolean }>('adminAbuseDisable');
+
 /** Firebase hata nesnesinden kullanıcıya gösterilecek mesajı çıkarır. */
 export function functionErrorMessage(err: unknown, fallback = 'Bir hata oluştu. Lütfen tekrar deneyin.'): string {
   const e = err as { code?: string; message?: string };

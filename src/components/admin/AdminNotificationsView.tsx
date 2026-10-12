@@ -22,7 +22,7 @@ interface Props {
   onNavigate: (link: NoteLink) => void;
 }
 
-type Filter = 'all' | 'task' | 'critical' | 'system' | 'message';
+type Filter = 'all' | 'task' | 'ticket' | 'critical' | 'system' | 'message';
 
 export const AdminNotificationsView: React.FC<Props> = ({ lang, isDark, email, onNavigate }) => {
   const L = (tr: string, en: string) => (lang === 'tr' ? tr : en);
@@ -106,6 +106,7 @@ function kindLook(it: InboxItem, isDark: boolean): { icon: IconName; color: stri
   const amber = isDark ? { color: '#E3A857', bg: 'rgba(227,168,87,.13)' } : { color: '#9A5B0B', bg: '#FDF1DE' };
   const red = { color: 'var(--a-danger)', bg: 'var(--a-danger-tint)' };
   const gray = { color: 'var(--a-muted)', bg: 'var(--a-active)' };
+  const teal = isDark ? { color: '#7CC7D4', bg: 'rgba(20,121,141,.18)' } : { color: '#0E6476', bg: '#E8F3F5' };
   switch (it.kind) {
     case 'critical': return { icon: it.data.action === 'qr_purged' ? 'trash' : 'userX', ...red };
     case 'limit_reached': return { icon: 'alert', ...amber };
@@ -113,6 +114,10 @@ function kindLook(it: InboxItem, isDark: boolean): { icon: IconName; color: stri
     case 'tag_lost': return { icon: 'ban', ...gray };
     case 'task': return it.doneAt ? { icon: 'task', color: 'var(--a-success)', bg: 'var(--a-success-tint)' } : { icon: 'task', ...purple };
     case 'message': return { icon: 'mail', color: 'var(--a-accent)', bg: 'var(--a-accent-tint)' };
+    case 'ticket_new': return { icon: 'message', ...teal };
+    case 'ticket_reply': return { icon: 'message', ...teal };
+    case 'ticket_sla': return it.data.breached ? { icon: 'clock', ...red } : { icon: 'clock', ...amber };
+    case 'abuse_report': return { icon: 'alert', ...red };
     default: return { icon: 'bell', ...gray };
   }
 }
@@ -123,6 +128,7 @@ const CategoryTag: React.FC<{ it: InboxItem; isDark: boolean; lang: AdminLang }>
   const look = c === 'critical' ? { color: 'var(--a-danger)', bg: 'var(--a-danger-tint)', text: L('Kritik işlem', 'Critical') }
     : c === 'task' ? { ...(isDark ? { color: '#C9B8FF', bg: 'rgba(157,143,232,.13)' } : { color: '#6941C6', bg: '#F1EDFD' }), text: L('Görev', 'Task') }
       : c === 'message' ? { color: 'var(--a-accent)', bg: 'var(--a-accent-tint)', text: L('Duyuru', 'Announcement') }
+        : c === 'ticket' ? { ...(isDark ? { color: '#7CC7D4', bg: 'rgba(20,121,141,.18)' } : { color: '#0E6476', bg: '#E8F3F5' }), text: L('Talep', 'Request') }
         : { color: 'var(--a-muted)', bg: 'var(--a-active)', text: L('Sistem', 'System') };
   return <span className="inline-flex items-center h-6 px-2 rounded-md text-[12px] whitespace-nowrap" style={{ color: look.color, background: look.bg }}>{look.text}</span>;
 };
@@ -176,7 +182,7 @@ const Inbox: React.FC<{
   useEffect(() => { onCount(items ? items.length : null); }, [items?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const counts = useMemo(() => {
-    const c = { all: 0, task: 0, critical: 0, system: 0, message: 0 } as Record<Filter, number>;
+    const c = { all: 0, task: 0, ticket: 0, critical: 0, system: 0, message: 0 } as Record<Filter, number>;
     for (const it of items || []) { c.all += 1; if (it.category in c) c[it.category as Filter] += 1; }
     return c;
   }, [items]);
@@ -200,6 +206,7 @@ const Inbox: React.FC<{
   const filters: { id: Filter; label: string }[] = [
     { id: 'all', label: L('Tümü', 'All') },
     { id: 'task', label: L('Görevler', 'Tasks') },
+    { id: 'ticket', label: L('Talepler', 'Requests') },
     { id: 'critical', label: L('Kritik işlemler', 'Critical') },
     { id: 'system', label: L('Sistem', 'System') },
     { id: 'message', label: L('Duyurular', 'Announcements') },

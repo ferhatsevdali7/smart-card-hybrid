@@ -36,6 +36,7 @@ const NAV: { group: 'ops' | 'out' | 'sec'; id: string; icon: IconName; tr: strin
   { group: 'ops', id: 'bank', icon: 'qr', tr: 'QR Bankası', en: 'QR Bank' },
   { group: 'ops', id: 'vehicles', icon: 'car', tr: 'Bağlı Araçlar', en: 'Linked Vehicles' },
   { group: 'ops', id: 'users', icon: 'users', tr: 'Kullanıcılar', en: 'Users' },
+  { group: 'ops', id: 'tickets', icon: 'message', tr: 'Talepler', en: 'Requests' },
   { group: 'out', id: 'disabled', icon: 'ban', tr: 'Devre Dışı', en: 'Disabled' },
   { group: 'out', id: 'trash', icon: 'trash', tr: 'Çöp Kutusu', en: 'Trash' },
   { group: 'sec', id: 'team', icon: 'key', tr: 'Ekip ve Yetkiler', en: 'Team & Permissions' },

@@ -189,6 +189,31 @@ service cloud.firestore {
     match /admin_notifications/{id}  { allow read, write: if false; } // eski (kullanılmıyor)
     match /admin_sends/{id}          { allow read, write: if false; }
 
+    // ------------------------------------------------------------ Destek talepleri
+    // Müşteri yalnızca kendi talebini ve yazışmasını okur; ekip (Talepler yetkisi) hepsini.
+    // İç notlar, sorumlu ve öncelik ayrı belgelerde: müşteriye hiç açılmaz. Yazma yalnızca sunucudan.
+    match /tickets/{id} {
+      allow get, list: if (signedIn() && resource.data.uid == request.auth.uid) || hasPerm('view.tickets');
+      allow write: if false;
+      match /messages/{m} {
+        allow read: if (signedIn() && get(/databases/$(database)/documents/tickets/$(id)).data.uid == request.auth.uid)
+          || hasPerm('view.tickets');
+        allow write: if false;
+      }
+      match /notes/{n} {
+        allow read: if hasPerm('view.tickets');
+        allow write: if false;
+      }
+    }
+    match /ticket_staff/{id}     { allow read: if hasPerm('view.tickets'); allow write: if false; }
+    match /ticket_templates/{id} { allow read: if hasPerm('view.tickets'); allow write: if false; }
+    match /ticket_files/{id} {
+      allow get: if (signedIn() && (resource.data.ownerUid == request.auth.uid || resource.data.uploaderUid == request.auth.uid))
+        || hasPerm('view.tickets');
+      allow list, write: if false;
+    }
+    match /abuse_reports/{id}    { allow read, write: if false; }
+
     // ------------------------------------------------------------ Bildirimler
     // Herkes yalnızca kendi kutusunu okur (askıdaki/çıkarılan üye okuyamaz). Yazma yalnızca sunucudan.
     match /admin_inbox/{owner} {

@@ -4,7 +4,7 @@ import {
   ShieldAlert, CreditCard, LayoutDashboard, QrCode, KeyRound, 
   Globe, Sun, Moon, LogIn, LogOut, User as UserIcon, Home, Menu, X, CarFront,
   HelpCircle, FileText, ChevronDown, ChevronUp, ChevronRight, Wifi, Sparkles, Edit3,
-  Download, Smartphone, AlertCircle
+  Download, Smartphone, AlertCircle, MessageSquare
 } from 'lucide-react';
 import { SmartCard, MedicalInfo, PersonalInfo, VehicleInfo } from './types/card';
 import { getStoredCardData, saveStoredCardData, clearStoredCardData, DEMO_CARD_DATA } from './lib/storage';
@@ -30,8 +30,10 @@ import { User } from 'firebase/auth';
 import { Language, ThemeMode, translations } from './lib/i18n';
 import { extractTagCode } from './lib/functionsClient';
 import { disablePushOnThisDevice } from './lib/pushService';
+import { SupportView } from './components/SupportView';
+import { listenMyTickets } from './lib/ticketService';
 
-type AppTab = 'home' | 'sos' | 'personal' | 'vehicle' | 'dashboard' | 'vault' | 'print_nfc' | 'admin';
+type AppTab = 'home' | 'sos' | 'personal' | 'vehicle' | 'dashboard' | 'vault' | 'print_nfc' | 'admin' | 'support';
 type SosSubTab = 'details' | 'qr' | 'nfc';
 type PersonalSubTab = 'details' | 'qr' | 'nfc';
 type VehicleSubTab = 'details' | 'qr';
@@ -45,8 +47,16 @@ export function App() {
     if (params.get('view') === 'admin') {
       return 'admin';
     }
+    if (params.get('view') === 'support') return 'support';
     return 'home';
   });
+  // Bildirimden gelinen destek talebi (?view=support&ticket=…)
+  const [supportTicketId] = useState<string | null>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('view') === 'support' ? params.get('ticket') : null;
+  });
+  // Destek ekibinin yanıt verdiği, henüz okunmamış talep sayısı (menüde rozet)
+  const [supportUnread, setSupportUnread] = useState(0);
   const [sosSubTab, setSosSubTab] = useState<SosSubTab>('details');
   const [personalSubTab, setPersonalSubTab] = useState<PersonalSubTab>('details');
   const [vehicleSubTab, setVehicleSubTab] = useState<VehicleSubTab>('details');
@@ -173,6 +183,9 @@ export function App() {
     } else if (view === 'admin') {
       setActiveTab('admin');
       setIsPublicScan(false);
+    } else if (view === 'support') {
+      setActiveTab('support');
+      setIsPublicScan(false);
     }
 
     if (id && view !== 'vehicle') {
@@ -192,6 +205,11 @@ export function App() {
       };
     }
   }, []);
+
+  useEffect(() => {
+    if (!user) { setSupportUnread(0); return; }
+    return listenMyTickets(user.uid, (l) => setSupportUnread(l.filter((x) => x.unreadForCustomer).length), () => setSupportUnread(0));
+  }, [user]);
 
   const toggleLanguage = () => {
     const nextLang: Language = language === 'tr' ? 'en' : 'tr';
@@ -417,7 +435,7 @@ export function App() {
               <button
                 onClick={() => setIsDrawerOpen(!isDrawerOpen)}
                 title={language === 'tr' ? 'Menü' : 'Menu'}
-                className={`p-2 rounded-xl border transition-all flex items-center justify-center ${
+                className={`relative p-2 rounded-xl border transition-all flex items-center justify-center ${
                   isDrawerOpen
                     ? 'bg-[#14798D] border-[#14798D] text-white shadow-md scale-105'
                     : isDark 
@@ -426,6 +444,9 @@ export function App() {
                 }`}
               >
                 {isDrawerOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+                {!isDrawerOpen && supportUnread > 0 && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#14798D] ring-2 ring-white" aria-label={language === 'tr' ? 'Yeni destek yanıtı' : 'New support reply'} />
+                )}
               </button>
             )}
 
@@ -676,6 +697,29 @@ export function App() {
                   </div>
 
                   <div className="space-y-1">
+                    {/* Destek Talepleri */}
+                    <button
+                      onClick={() => handleNavigate('support')}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-2xl text-xs font-semibold transition-all text-left ${
+                        activeTab === 'support'
+                          ? (isDark ? 'bg-slate-800/80 text-white' : 'bg-slate-100 text-slate-900')
+                          : (isDark ? 'hover:bg-slate-800/40 text-slate-300' : 'hover:bg-slate-100 text-slate-700')
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-xl bg-[#14798D]/15 text-[#14798D] flex items-center justify-center shrink-0">
+                        <MessageSquare className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-bold">{language === 'tr' ? 'Destek Talepleri' : 'Support Requests'}</div>
+                        <div className="text-[10px] text-slate-400">{language === 'tr' ? 'İstek, öneri ve şikayetleriniz' : 'Requests, suggestions & complaints'}</div>
+                      </div>
+                      {supportUnread > 0 && (
+                        <span className="min-w-[20px] h-5 px-1.5 rounded-full bg-[#14798D] text-white text-[10px] font-bold flex items-center justify-center" aria-label={language === 'tr' ? `${supportUnread} yeni yanıt` : `${supportUnread} new replies`}>
+                          {supportUnread > 9 ? '9+' : supportUnread}
+                        </span>
+                      )}
+                    </button>
+
                     {/* PWA Ana Ekrana Yükle Butonu */}
                     <button
                       onClick={handleInstallApp}
@@ -747,7 +791,7 @@ export function App() {
       )}
 
       {/* Sol Alt Köşe Profil Kartı (Kullanıcı Giriş Yaptığında Otomatik Görünür - Tıklayınca Profil/Hesap Modalı Açılır) */}
-      {user && (
+      {user && activeTab !== 'support' && (
         <div 
           onClick={() => setIsAccountModalOpen(true)}
           className={`fixed bottom-5 left-5 z-40 flex items-center gap-3 px-3.5 py-2.5 rounded-2xl border cursor-pointer transition-all duration-300 shadow-xl backdrop-blur-lg hover:scale-105 ${
@@ -855,6 +899,23 @@ export function App() {
           />
         )}
 
+        {activeTab === 'support' && (
+          user ? (
+            <SupportView user={user} lang={language} initialTicketId={supportTicketId} onOpenPrivacy={() => setIsPrivacyModalOpen(true)} />
+          ) : (
+            <div className="max-w-md mx-auto px-4 py-16 text-center">
+              <MessageSquare className="w-8 h-8 mx-auto text-[#14798D]" />
+              <h1 className="mt-3 text-base font-bold">{language === 'tr' ? 'Destek Talepleri' : 'Support Requests'}</h1>
+              <p className={`mt-1.5 text-sm ${isDark ? 'text-slate-400' : 'text-slate-600'}`}>
+                {language === 'tr' ? 'Destek taleplerinizi görüntülemek için lütfen giriş yapınız.' : 'Please sign in to view your support requests.'}
+              </p>
+              <button onClick={() => setIsAuthModalOpen(true)} className="mt-5 px-5 py-3 rounded-xl bg-[#14798D] text-white text-sm font-bold">
+                {language === 'tr' ? 'Giriş Yap' : 'Sign in'}
+              </button>
+            </div>
+          )
+        )}
+
         {activeTab === 'print_nfc' && (
           <div className="max-w-4xl mx-auto p-4 space-y-8 pb-20">
             <QrCodeExporter card={card} lang={language} theme={theme} />
@@ -870,7 +931,7 @@ export function App() {
         onSuccess={async (loggedInUser) => {
           setIsAuthModalOpen(false);
           setIsPublicScan(false);
-          setActiveTab('home');
+          setActiveTab((tab) => (tab === 'support' ? tab : 'home'));
           const targetUser = loggedInUser || auth.currentUser;
           if (targetUser) {
             await syncCustomerUser(targetUser);

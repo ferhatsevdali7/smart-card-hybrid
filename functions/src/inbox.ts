@@ -25,8 +25,9 @@ import { dayKey } from './stats';
 
 export const INBOX_TTL_DAYS = 90;
 
-export type NoteKind = 'critical' | 'limit_reached' | 'batch_created' | 'tag_lost' | 'task' | 'message';
-export type NoteCategory = 'critical' | 'system' | 'task' | 'message';
+export type NoteKind = 'critical' | 'limit_reached' | 'batch_created' | 'tag_lost' | 'task' | 'message'
+  | 'ticket_new' | 'ticket_reply' | 'ticket_sla' | 'abuse_report';
+export type NoteCategory = 'critical' | 'system' | 'task' | 'message' | 'ticket';
 
 export const CATEGORY: Record<NoteKind, NoteCategory> = {
   critical: 'critical',
@@ -35,20 +36,33 @@ export const CATEGORY: Record<NoteKind, NoteCategory> = {
   tag_lost: 'system',
   task: 'task',
   message: 'message',
+  ticket_new: 'ticket',
+  ticket_reply: 'ticket',
+  ticket_sla: 'ticket',
+  abuse_report: 'ticket',
 };
 
 /** Bildirimin götürebileceği sayfalar (istemcideki bölüm adlarıyla aynı) */
-export const LINK_SECTIONS = ['overview', 'depot', 'batch', 'stand', 'bank', 'disabled', 'trash', 'vehicles', 'users', 'team', 'audit'] as const;
+export const LINK_SECTIONS = ['overview', 'depot', 'batch', 'stand', 'bank', 'disabled', 'trash', 'vehicles', 'users', 'tickets', 'team', 'audit'] as const;
 export type LinkSection = (typeof LINK_SECTIONS)[number];
 export interface NoteLink { section: LinkSection; id?: string; tab?: string }
 
-/** Olay → alıcı grubu. Şimdilik sistem olayları süper yöneticilere gider. */
-type Audience = 'super';
+/**
+ * Olay → alıcı grubu.
+ *  super   : süper yöneticiler
+ *  tickets : Talepler sayfasını görebilen ekip üyeleri (etkin / davetli) + süper yöneticiler
+ * notify(..., { to }) ile alıcılar açıkça da verilebilir (örn. talebin sorumlusu).
+ */
+type Audience = 'super' | 'tickets';
 const ROUTES: Record<Exclude<NoteKind, 'task' | 'message'>, Audience[]> = {
   critical: ['super'],
   limit_reached: ['super'],
   batch_created: ['super'],
   tag_lost: ['super'],
+  ticket_new: ['tickets'],
+  ticket_reply: ['tickets'],
+  ticket_sla: ['tickets'],
+  abuse_report: ['tickets'],
 };
 
 export const inboxCol = (email: string) => db().collection('admin_inbox').doc(email.toLowerCase()).collection('inbox_items');
@@ -93,9 +107,22 @@ export function baseItem(kind: NoteKind, p: {
   };
 }
 
-function audienceEmails(kind: keyof typeof ROUTES): string[] {
+/** Belirli bir yetkisi olan etkin / davetli ekip üyeleri */
+export async function staffWithPerm(perm: string): Promise<string[]> {
+  const snap = await db().collection('staff_members').where('perms', 'array-contains', perm).get();
+  return snap.docs.filter((d) => {
+    const x = d.data();
+    const status = x.status || (x.isActive === false ? 'suspended' : 'active');
+    return status === 'active' || status === 'invited';
+  }).map((d) => d.id.toLowerCase());
+}
+
+async function audienceEmails(kind: keyof typeof ROUTES): Promise<string[]> {
   const out = new Set<string>();
-  for (const a of ROUTES[kind]) if (a === 'super') SUPER_ADMIN_EMAILS.forEach((e) => out.add(e.toLowerCase()));
+  for (const a of ROUTES[kind]) {
+    if (a === 'super' || a === 'tickets') SUPER_ADMIN_EMAILS.forEach((e) => out.add(e.toLowerCase()));
+    if (a === 'tickets') (await staffWithPerm('view.tickets')).forEach((e) => out.add(e));
+  }
   return [...out];
 }
 
@@ -107,10 +134,13 @@ function audienceEmails(kind: keyof typeof ROUTES): string[] {
 export async function notify(kind: keyof typeof ROUTES, p: {
   title: string; body?: string; actorEmail?: string | null; actorName?: string | null; link?: NoteLink | null;
   data?: Record<string, unknown>; docId?: string;
+  /** Verilirse yalnızca bu kişilere gider (yönlendirme tablosu yerine) */
+  to?: string[];
 }): Promise<number> {
   try {
     const actor = (p.actorEmail || '').toLowerCase();
-    const to = audienceEmails(kind).filter((e) => e !== actor);
+    const base = p.to ? [...new Set(p.to.map((e) => e.toLowerCase()))] : await audienceEmails(kind);
+    const to = base.filter((e) => e && e !== actor);
     const item = baseItem(kind, p);
     let n = 0;
     await Promise.all(to.map(async (email) => {

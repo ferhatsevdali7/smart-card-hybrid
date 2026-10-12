@@ -11,6 +11,7 @@ import { AdminBankView, AdminDisabledView, AdminStandView, AdminTrashView } from
 import { AdminUsersView } from './admin/AdminUsersView';
 import { AdminVehiclesView } from './admin/AdminVehiclesView';
 import { AdminTeamView } from './admin/AdminTeamView';
+import { AdminTicketsView } from './admin/AdminTicketsView';
 import { AdminNotificationsView } from './admin/AdminNotificationsView';
 import type { NoteLink } from '../lib/notificationService';
 import { NoAccess } from './admin/customerUi';
@@ -53,7 +54,7 @@ export const AdminDashboardContainer: React.FC = () => {
   const [vehicleId, setVehicleId] = useState<string | null>(null);
   const [detailCrumb, setDetailCrumb] = useState<string>('');
   // Bildirimden gelinen hedef (ekip üyesi / kullanıcılar sekmesi); her geçişte sayfa baştan açılır
-  const [deepLink, setDeepLink] = useState<{ team?: string | null; usersTab?: 'accounts' | 'deleted'; n: number }>({ n: 0 });
+  const [deepLink, setDeepLink] = useState<{ team?: string | null; usersTab?: 'accounts' | 'deleted'; ticket?: string | null; ticketTab?: 'tickets' | 'abuse'; n: number }>({ n: 0 });
 
   useEffect(() => onAuthStateChanged(auth, setAuthUser), []);
 
@@ -124,7 +125,7 @@ export const AdminDashboardContainer: React.FC = () => {
   // Açık sayfa yetkisi yoksa (ör. Genel Bakış verilmemiş) görebildiği ilk sayfaya geçilir.
   useEffect(() => {
     if (!access.loaded || canSee(activeSection)) return;
-    const first = ['overview', 'depot', 'stand', 'bank', 'vehicles', 'users', 'disabled', 'trash', 'team', 'audit'].find(canSee);
+    const first = ['overview', 'depot', 'stand', 'bank', 'vehicles', 'users', 'tickets', 'disabled', 'trash', 'team', 'audit'].find(canSee);
     if (first) setActiveSection(first);
   }, [access, activeSection]);
 
@@ -177,6 +178,7 @@ export const AdminDashboardContainer: React.FC = () => {
     go(l.section);
     if (l.section === 'team' && l.id) { setDetailCrumb(l.id); setDeepLink((d) => ({ team: l.id, n: d.n + 1 })); }
     if (l.section === 'users' && l.tab === 'deleted') setDeepLink((d) => ({ usersTab: 'deleted', n: d.n + 1 }));
+    if (l.section === 'tickets' && (l.id || l.tab === 'abuse')) setDeepLink((d) => ({ ticket: l.id || null, ticketTab: l.tab === 'abuse' ? 'abuse' : 'tickets', n: d.n + 1 }));
   };
   const openUser = (uid: string, name: string) => { setActiveSection('users'); setVehicleId(null); setUserId(uid); setDetailCrumb(name); };
   const openVehicle = (id: string, plate: string) => { setActiveSection('vehicles'); setUserId(null); setVehicleId(id); setDetailCrumb(plate); };
@@ -201,7 +203,7 @@ export const AdminDashboardContainer: React.FC = () => {
       onSelectSection={go}
       navCounts={navCounts}
       crumbExtra={activeSection === 'batch' && batchId ? batchId
-        : (activeSection === 'users' && userId) || (activeSection === 'vehicles' && vehicleId) || activeSection === 'team' ? detailCrumb || null : null}
+        : (activeSection === 'users' && userId) || (activeSection === 'vehicles' && vehicleId) || activeSection === 'team' || activeSection === 'tickets' ? detailCrumb || null : null}
       onOpenSettings={openSettings}
       onLogout={handleLogout}
       lang={lang}
@@ -278,6 +280,15 @@ export const AdminDashboardContainer: React.FC = () => {
           initialTab={deepLink.usersTab}
           lang={lang} isDark={isDark} role={role} detailUid={userId}
           onOpenUser={openUser} onCloseUser={() => setUserId(null)} onOpenVehicle={openVehicle}
+        />
+      )}
+      {allowed && activeSection === 'tickets' && (
+        <AdminTicketsView
+          key={`tickets-${deepLink.n}`}
+          lang={lang} isDark={isDark}
+          openId={deepLink.ticket || null} initialTab={deepLink.ticketTab}
+          onCrumb={(t) => setDetailCrumb(t || '')}
+          onOpenUser={openUser} onOpenVehicle={openVehicle}
         />
       )}
       {access.loaded && activeSection === 'notifications' && (

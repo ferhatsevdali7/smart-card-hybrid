@@ -7,9 +7,10 @@ import {
   adminInboxClearFn, adminInboxMarkReadFn, adminInboxTaskDoneFn, adminListSentFn, adminSendNotificationFn,
 } from './functionsClient';
 
-export type NoteKind = 'critical' | 'limit_reached' | 'batch_created' | 'tag_lost' | 'task' | 'message';
-export type NoteCategory = 'critical' | 'system' | 'task' | 'message';
-export type LinkSection = 'overview' | 'depot' | 'batch' | 'stand' | 'bank' | 'disabled' | 'trash' | 'vehicles' | 'users' | 'team' | 'audit';
+export type NoteKind = 'critical' | 'limit_reached' | 'batch_created' | 'tag_lost' | 'task' | 'message'
+  | 'ticket_new' | 'ticket_reply' | 'ticket_sla' | 'abuse_report';
+export type NoteCategory = 'critical' | 'system' | 'task' | 'message' | 'ticket';
+export type LinkSection = 'overview' | 'depot' | 'batch' | 'stand' | 'bank' | 'disabled' | 'trash' | 'vehicles' | 'users' | 'tickets' | 'team' | 'audit';
 export interface NoteLink { section: LinkSection; id?: string; tab?: string }
 
 export interface InboxItem {
@@ -193,6 +194,15 @@ export function noteText(it: InboxItem, L: L): NoteText {
       return { actor: null, rest: L(`Yeni parti üretildi: ${s(d.batchId)}`, `New batch created: ${s(d.batchId)}`), meta: [actor, L(`${n(d.count)} QR depoya girdi`, `${n(d.count)} QR added to stock`)].filter(Boolean).join(' · '), body: '' };
     case 'tag_lost':
       return { actor: null, rest: L("Bir müşteri QR'ını kayıp bildirdi", 'A customer reported a QR as lost'), meta: [s(d.serial), L('otomatik kapatıldı', 'disabled automatically')].filter(Boolean).join(' · '), body: '' };
+    case 'ticket_new':
+      if (d.assigned) return { actor: null, rest: it.title, meta: [actor, s(d.no)].filter(Boolean).join(' · '), body: '' };
+      return { actor: null, rest: it.title, meta: [actor, it.body].filter(Boolean).join(' · '), body: '' };
+    case 'ticket_reply':
+      return { actor: null, rest: it.title, meta: [actor, s(d.no)].filter(Boolean).join(' · '), body: '' };
+    case 'ticket_sla':
+      return { actor: null, rest: it.title, meta: s(d.no), body: '' };
+    case 'abuse_report':
+      return { actor: null, rest: it.title, meta: [L('QR', 'QR') + ' ' + it.body, L('girişsiz ziyaretçi', 'anonymous visitor')].join(' · '), body: '' };
     case 'task':
     case 'message':
       return { actor: null, rest: it.title, meta: [actor, audienceText(d, L)].filter(Boolean).join(' · '), body: it.body };
@@ -219,16 +229,19 @@ export const SECTION_NAMES: Record<LinkSection, { tr: string; en: string; go: st
   trash: { tr: 'Çöp Kutusu', en: 'Trash', go: "Çöp Kutusu'na git" },
   vehicles: { tr: 'Bağlı Araçlar', en: 'Linked Vehicles', go: "Bağlı Araçlar'a git" },
   users: { tr: 'Kullanıcılar', en: 'Users', go: "Kullanıcılar'a git" },
+  tickets: { tr: 'Talepler', en: 'Requests', go: "Talepler'e git" },
   team: { tr: 'Ekip ve Yetkiler', en: 'Team', go: "Ekip ve Yetkiler'e git" },
   audit: { tr: 'Denetim Kayıtları', en: 'Audit Logs', go: "Denetim Kayıtları'na git" },
 };
 
 /** Bildirimde seçilebilen sayfalar (parti gibi kimlik isteyenler hariç) */
-export const COMPOSE_SECTIONS: LinkSection[] = ['overview', 'depot', 'stand', 'bank', 'disabled', 'trash', 'vehicles', 'users', 'audit'];
+export const COMPOSE_SECTIONS: LinkSection[] = ['overview', 'depot', 'stand', 'bank', 'disabled', 'trash', 'vehicles', 'users', 'tickets', 'audit'];
 
 export function linkLabel(link: NoteLink, L: L): string {
   if (link.section === 'users' && link.tab === 'deleted') return L('Silinmiş hesaplara git', 'Open deleted accounts');
   if (link.section === 'team' && link.id) return L('Üyeye git', 'Open member');
+  if (link.section === 'tickets' && link.tab === 'abuse') return L('Kötüye kullanım bildirimlerine git', 'Open abuse reports');
+  if (link.section === 'tickets' && link.id) return L('Talebe git', 'Open request');
   const nm = SECTION_NAMES[link.section];
   return nm ? L(nm.go, `Open ${nm.en}`) : L('Sayfaya git', 'Open page');
 }

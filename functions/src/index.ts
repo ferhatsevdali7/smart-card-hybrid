@@ -50,6 +50,11 @@ export {
 export {
   adminInboxMarkRead, adminInboxClear, adminInboxTaskDone, adminSendNotification, adminListSent, nightlyInboxCleanup,
 } from './notifications';
+export {
+  ticketUploadFile, ticketCreate, ticketReply, ticketReopen, ticketRate, ticketMarkRead, reportAbuse,
+  adminListTickets, adminGetTicket, adminTicketStaff, adminTicketReply, adminTicketUpdate, adminTicketFile,
+  adminListTemplates, adminSaveTemplate, adminDeleteTemplate, adminListAbuse, adminAbuseReview, adminAbuseDisable, ticketSweepJob,
+} from './tickets';
 import { refreshQuietly } from './directory';
 import { requirePerm } from './permissions';
 import { notify } from './inbox';

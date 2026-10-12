@@ -55,6 +55,7 @@ export const SECTION_PERM: Record<string, string> = {
   vehicles: 'view.vehicles',
   users: 'view.users',
   audit: 'view.audit',
+  tickets: 'view.tickets',
   team: 'super',
 };
 
@@ -108,6 +109,10 @@ export const PERM_GROUPS: PermGroup[] = [
   { page: 'users', tr: 'Kullanıcılar', en: 'Users', view: 'view.users', actions: [
     { key: 'act.user_delete', tr: 'Müşteri hesabını silebilir', en: 'Can delete customer accounts', critical: true },
   ] },
+  { page: 'tickets', tr: 'Talepler', en: 'Tickets', view: 'view.tickets', actions: [
+    { key: 'act.ticket_reply', tr: 'Müşteriye yanıt verebilir, iç not yazabilir', en: 'Can reply and add notes' },
+    { key: 'act.ticket_manage', tr: 'Atayabilir, durum değiştirebilir, hazır yanıtları yönetebilir', en: 'Can assign, change status, manage templates', note: { tr: 'Kötüye kullanım bildirimini incelendi yapma da bu yetkiyle; QR kapatma QR Bankası yetkisiyle', en: 'Disabling a QR needs the QR Bank permission' } },
+  ] },
   { page: 'audit', tr: 'Denetim Kayıtları', en: 'Audit Logs', view: 'view.audit', actions: [] },
 ];
 
@@ -127,6 +132,8 @@ export const ACTION_PAGES: Record<string, string[]> = {
   'act.restore': ['view.trash'],
   'act.purge': ['view.trash'],
   'act.user_delete': ['view.users'],
+  'act.ticket_reply': ['view.tickets'],
+  'act.ticket_manage': ['view.tickets'],
 };
 
 export const CRITICAL_PERMS = new Set(['act.purge', 'act.user_delete']);

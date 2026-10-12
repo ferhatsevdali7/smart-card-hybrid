@@ -36,6 +36,7 @@ export const PERM_GROUPS: { page: string; view: string; actions: string[] }[] = 
   { page: 'trash', view: 'view.trash', actions: ['act.restore', 'act.purge'] },
   { page: 'vehicles', view: 'view.vehicles', actions: [] },
   { page: 'users', view: 'view.users', actions: ['act.user_delete'] },
+  { page: 'tickets', view: 'view.tickets', actions: ['act.ticket_reply', 'act.ticket_manage'] },
   { page: 'audit', view: 'view.audit', actions: [] },
 ];
 
@@ -55,6 +56,8 @@ const ACTION_PAGES: Record<string, string[]> = {
   'act.restore': ['view.trash'],
   'act.purge': ['view.trash'],
   'act.user_delete': ['view.users'],
+  'act.ticket_reply': ['view.tickets'],
+  'act.ticket_manage': ['view.tickets'],
 };
 
 export const VIEW_PERMS = PERM_GROUPS.map((g) => g.view);
@@ -95,8 +98,8 @@ export const BUILTIN_POSITIONS: Record<string, { name: string; description: stri
   },
   support: {
     name: 'Müşteri destek',
-    description: 'Kullanıcılar, Bağlı Araçlar, QR Bankası ve Devre Dışı: QR kapatma ve açma',
-    perms: ['view.overview', 'view.users', 'view.vehicles', 'view.bank', 'view.disabled', 'act.disable', 'act.expire', 'act.enable', 'act.reset'],
+    description: 'Kullanıcılar, Bağlı Araçlar, Talepler, QR Bankası ve Devre Dışı: QR kapatma ve açma, taleplere yanıt',
+    perms: ['view.overview', 'view.users', 'view.vehicles', 'view.bank', 'view.disabled', 'act.disable', 'act.expire', 'act.enable', 'act.reset', 'view.tickets', 'act.ticket_reply', 'act.ticket_manage'],
   },
   sales: {
     name: 'Satış',
