@@ -88,7 +88,8 @@ export interface QrTagItem {
 }
 
 // ---------------- ADMIN & STAFF RBAC TYPES ----------------
-export type StaffRole = 'super_admin' | 'production' | 'support' | 'warehouse';
+/** Panel oturumu: 'super_admin' ya da 'staff' (eski kayıtlarda üretim/destek/depo da görülebilir). Yetkiler: lib/access */
+export type StaffRole = 'super_admin' | 'staff' | 'production' | 'support' | 'warehouse';
 
 export interface StaffMember {
   uid?: string;

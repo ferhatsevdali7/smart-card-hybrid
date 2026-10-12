@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { AdminSession, AdminThemePref } from '../lib/adminSessionService';
 import { AdminLang, Avatar, Icon, IconName, roleLabel, themeVars, useAdminFonts } from './admin/adminUi';
 import { ProfileMenu, SettingsTab } from './admin/ProfileMenu';
+import { canSee, useAccess } from '../lib/access';
 
 interface AdminLayoutProps {
   session: AdminSession;
@@ -36,11 +37,15 @@ const NAV: { group: 'ops' | 'out' | 'sec'; id: string; icon: IconName; tr: strin
   { group: 'ops', id: 'users', icon: 'users', tr: 'Kullanıcılar', en: 'Users' },
   { group: 'out', id: 'disabled', icon: 'ban', tr: 'Devre Dışı', en: 'Disabled' },
   { group: 'out', id: 'trash', icon: 'trash', tr: 'Çöp Kutusu', en: 'Trash' },
+  { group: 'sec', id: 'team', icon: 'key', tr: 'Ekip ve Yetkiler', en: 'Team & Permissions' },
   { group: 'sec', id: 'audit', icon: 'shield', tr: 'Denetim Kayıtları', en: 'Audit Logs' },
 ];
 
 /** Alt sayfalar menüde ana sayfalarını vurgular */
 const PARENT: Record<string, string> = { compare: 'overview', batch: 'depot' };
+
+/** Yetkisi olmayan sayfa menüde hiç görünmez (asıl denetim sunucuda). */
+const visibleNav = (group: string) => NAV.filter((n) => n.group === group && canSee(n.id));
 
 export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
   useAdminFonts();
@@ -48,7 +53,8 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
   const [navOpen, setNavOpen] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const L = (tr: string, en: string) => (p.lang === 'tr' ? tr : en);
-  const role = roleLabel(p.session.role, p.lang);
+  const access = useAccess();
+  const role = access.superAdmin ? roleLabel('super_admin', p.lang) : (access.positionName || p.session.positionName || roleLabel(p.session.role, p.lang));
 
   useEffect(() => { setNavOpen(false); }, [p.activeSection]);
 
@@ -82,12 +88,15 @@ export const AdminLayout: React.FC<AdminLayoutProps> = (p) => {
 
   const sidebar = (
     <nav aria-label={L('Yönetim menüsü', 'Admin menu')} className="flex flex-col gap-0.5 p-3 pt-4">
-      {groupTitle(L('QR ve müşteriler', 'QR & customers'), true)}
-      {NAV.filter((n) => n.group === 'ops').map(navLink)}
-      {groupTitle(L('Kullanım dışı', 'Out of use'))}
-      {NAV.filter((n) => n.group === 'out').map(navLink)}
-      {groupTitle(L('Güvenlik', 'Security'))}
-      {NAV.filter((n) => n.group === 'sec').map(navLink)}
+      {visibleNav('ops').length > 0 && groupTitle(L('QR ve müşteriler', 'QR & customers'), true)}
+      {visibleNav('ops').map(navLink)}
+      {visibleNav('out').length > 0 && groupTitle(L('Kullanım dışı', 'Out of use'), visibleNav('ops').length === 0)}
+      {visibleNav('out').map(navLink)}
+      {visibleNav('sec').length > 0 && groupTitle(L('Yönetim', 'Administration'), visibleNav('ops').length + visibleNav('out').length === 0)}
+      {visibleNav('sec').map(navLink)}
+      {access.loaded && NAV.every((n) => !canSee(n.id)) && (
+        <p className="m-0 px-2.5 pt-2 text-[12px] leading-relaxed" style={{ color: 'var(--a-faint)' }}>{L('Pozisyonunuza henüz sayfa yetkisi verilmemiş. Süper yöneticiyle görüşün.', 'Your position has no pages yet.')}</p>
+      )}
     </nav>
   );
 

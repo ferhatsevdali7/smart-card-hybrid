@@ -10,6 +10,12 @@ import { AdminBatchView } from './admin/AdminBatchView';
 import { AdminBankView, AdminDisabledView, AdminStandView, AdminTrashView } from './admin/AdminStageViews';
 import { AdminUsersView } from './admin/AdminUsersView';
 import { AdminVehiclesView } from './admin/AdminVehiclesView';
+import { AdminTeamView } from './admin/AdminTeamView';
+import { NoAccess } from './admin/customerUi';
+import { canSee, clearAccess, getAccess, seesTags, setAccess, useAccess } from '../lib/access';
+import { fetchStaffAccess } from '../lib/staffAuthService';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../lib/firebase';
 import { LBatch, ensureLifecycle, listenBatches } from '../lib/lifecycleService';
 import type { SettingsTab } from './admin/ProfileMenu';
 import { AdminLang, Icon, IconName, roleLabel, useResolvedDark } from './admin/adminUi';
@@ -22,6 +28,7 @@ import {
   registerAdminSession, revokeAdminSession, touchAdminSession, watchSessionRevoked,
 } from '../lib/adminAccountService';
 import { auth } from '../lib/firebase';
+
 
 export const AdminDashboardContainer: React.FC = () => {
   const [session, setSession] = useState<AdminSession | null>(() => getAdminSession());
@@ -55,6 +62,33 @@ export const AdminDashboardContainer: React.FC = () => {
 
   const uid = authUser && session && authUser.email?.toLowerCase() === session.email ? authUser.uid : null;
 
+  const access = useAccess();
+
+  // Yetkiler sunucudan alınır; ekip dışı/askıda ise çıkış yapılır. Ekip üyesinin kendi kaydı dinlenir:
+  // pozisyonu değişince menü ve düğmeler anında güncellenir, askıya alınınca ya da çıkarılınca oturum kapanır.
+  useEffect(() => {
+    if (!uid || !session) return;
+    let alive = true;
+    let stop: (() => void) | null = null;
+    fetchStaffAccess()
+      .then((a) => {
+        if (!alive) return;
+        setAccess({ superAdmin: a.superAdmin, perms: a.perms, positionName: a.positionName });
+        if (a.superAdmin) return;
+        stop = onSnapshot(
+          doc(db, 'staff_members', session.email),
+          (snap) => {
+            const d = snap.data();
+            if (!snap.exists() || !d || d.status === 'suspended' || d.isActive === false) { forceLogout(); return; }
+            setAccess({ superAdmin: false, perms: Array.isArray(d.perms) ? d.perms : [], positionName: getAccess().positionName });
+          },
+          () => undefined,
+        );
+      })
+      .catch((e) => { console.warn('[staff]', e?.message || e); if (alive) forceLogout(); });
+    return () => { alive = false; stop?.(); };
+  }, [uid, session?.token]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Oturum kaydı, profil, aktif oturumlar ve uzaktan kapatma takibi
   useEffect(() => {
     if (!uid || !session) return;
@@ -73,14 +107,22 @@ export const AdminDashboardContainer: React.FC = () => {
 
   // QR partileri (QR Deposu ve menüdeki sayılar için). İlk açılışta eski kayıtlar yeni yapıya taşınır.
   useEffect(() => {
-    if (!uid) return;
+    if (!uid || !access.loaded) return;
+    if (!seesTags()) { setBatches([]); return; }
     ensureLifecycle();
     setBatchesError(false);
     return listenBatches(
       (list) => { setBatches(list); setBatchesError(false); },
       (e) => { console.error('[batches]', e); setBatchesError(true); },
     );
-  }, [uid]);
+  }, [uid, access.loaded, access.superAdmin, [...access.perms].sort().join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Açık sayfa yetkisi yoksa (ör. Genel Bakış verilmemiş) görebildiği ilk sayfaya geçilir.
+  useEffect(() => {
+    if (!access.loaded || canSee(activeSection)) return;
+    const first = ['overview', 'depot', 'stand', 'bank', 'vehicles', 'users', 'disabled', 'trash', 'team', 'audit'].find(canSee);
+    if (first) setActiveSection(first);
+  }, [access, activeSection]);
 
   // Süre dolunca otomatik çıkış
   useEffect(() => {
@@ -91,6 +133,7 @@ export const AdminDashboardContainer: React.FC = () => {
   }, [session?.token]);
 
   const forceLogout = () => {
+    clearAccess();
     clearAdminSession();
     setSession(null);
     signOut(auth).catch(() => undefined);
@@ -137,6 +180,7 @@ export const AdminDashboardContainer: React.FC = () => {
   const role = session.role;
   const openSettings = (tab: SettingsTab) => { setSettingsTab(tab); setActiveSection('settings'); };
   const inSettings = activeSection === 'settings';
+  const allowed = access.loaded && canSee(activeSection);
 
   return (
     <AdminLayout
@@ -145,7 +189,7 @@ export const AdminDashboardContainer: React.FC = () => {
       onSelectSection={go}
       navCounts={navCounts}
       crumbExtra={activeSection === 'batch' && batchId ? batchId
-        : (activeSection === 'users' && userId) || (activeSection === 'vehicles' && vehicleId) ? detailCrumb || null : null}
+        : (activeSection === 'users' && userId) || (activeSection === 'vehicles' && vehicleId) || activeSection === 'team' ? detailCrumb || null : null}
       onOpenSettings={openSettings}
       onLogout={handleLogout}
       lang={lang}
@@ -180,40 +224,49 @@ export const AdminDashboardContainer: React.FC = () => {
         )
       )}
 
-      {activeSection === 'overview' && (
+      {!inSettings && access.loaded && !canSee(activeSection) && (
+        <NoAccess lang={lang} title={L('Bu sayfa', 'This page')} />
+      )}
+      {!inSettings && !access.loaded && (
+        <p className="p-8 text-sm" style={{ color: 'var(--a-muted)' }}>{L('Yetkiler yükleniyor…', 'Loading permissions…')}</p>
+      )}
+      {activeSection === 'team' && access.loaded && canSee('team') && (
+        <AdminTeamView lang={lang} isDark={isDark} onCrumb={(t) => setDetailCrumb(t || '')} />
+      )}
+      {allowed && activeSection === 'overview' && (
         <AdminOverviewView lang={lang} isDark={isDark} uid={uid} onNavigate={go} />
       )}
-      {activeSection === 'compare' && (
+      {allowed && activeSection === 'compare' && (
         <AdminCompareView lang={lang} isDark={isDark} onNavigate={go} />
       )}
-      {activeSection === 'depot' && (
+      {allowed && activeSection === 'depot' && (
         <AdminDepotView lang={lang} isDark={isDark} role={role} batches={batches} batchesError={batchesError} onOpenBatch={openBatch} />
       )}
-      {activeSection === 'batch' && batchId && (
+      {allowed && activeSection === 'batch' && batchId && (
         <AdminBatchView
           lang={lang} isDark={isDark} role={role} batchId={batchId}
           batch={batches?.find((b) => b.id === batchId)}
           onBack={() => go('depot')}
         />
       )}
-      {activeSection === 'stand' && <AdminStandView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
-      {activeSection === 'bank' && <AdminBankView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
-      {activeSection === 'disabled' && <AdminDisabledView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
-      {activeSection === 'trash' && <AdminTrashView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
+      {allowed && activeSection === 'stand' && <AdminStandView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
+      {allowed && activeSection === 'bank' && <AdminBankView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
+      {allowed && activeSection === 'disabled' && <AdminDisabledView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
+      {allowed && activeSection === 'trash' && <AdminTrashView lang={lang} isDark={isDark} role={role} onOpenBatch={openBatch} />}
 
-      {activeSection === 'vehicles' && (
+      {allowed && activeSection === 'vehicles' && (
         <AdminVehiclesView
           lang={lang} isDark={isDark} role={role} detailId={vehicleId}
           onOpenVehicle={openVehicle} onCloseVehicle={() => setVehicleId(null)} onOpenUser={openUser}
         />
       )}
-      {activeSection === 'users' && (
+      {allowed && activeSection === 'users' && (
         <AdminUsersView
           lang={lang} isDark={isDark} role={role} detailUid={userId}
           onOpenUser={openUser} onCloseUser={() => setUserId(null)} onOpenVehicle={openVehicle}
         />
       )}
-      {activeSection === 'audit' && (
+      {allowed && activeSection === 'audit' && (
         <Placeholder icon="shield" title={L('Denetim Kayıtları', 'Audit Logs')} text={L('Tüm yöneticilerin işlem kayıtları bu bölümde listelenecek. Kendi işlemleriniz için Profil ve Ayarlar › Hesap etkinliğim bölümüne bakın.', 'All admins\' actions will be listed here. For your own, see Profile & Settings › My activity.')} />
       )}
     </AdminLayout>

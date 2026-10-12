@@ -29,21 +29,26 @@ import {
 } from './config';
 import {
   clientIp, db, generateCode, maskPlate, parseCode, rateLimit, requireAuth,
-  requireStaff, requireString, sanitizeNote, sha256, yearMonthIstanbul,
+  requireString, sanitizeNote, sha256, yearMonthIstanbul,
 } from './helpers';
 import { sendPushToUser } from './push';
 import { addDays, bumpStat, dayKey, rollupShards } from './stats';
 
-import { TOMBSTONES, applyTagCounts, runTagAction, snap, stageOf } from './lifecycle';
+import { ACTION_PERM, TOMBSTONES, applyTagCounts, runTagAction, snap, stageOf } from './lifecycle';
 
 export { adminOverview, adminPeriodSeries } from './overview';
 export { adminTagAction, adminBatchAction, adminEnsureLifecycle, adminRecountBatches } from './lifecycle';
 export {
   syncMyAccount, deleteMyAccount, adminEnsureDirectory, nightlyDirectory,
   adminListUsers, adminUserStats, adminGetUser, adminListDeletedAccounts,
-  adminListVehicles, adminVehicleStats, adminGetVehicle,
+  adminListVehicles, adminVehicleStats, adminGetVehicle, adminDeleteUser,
 } from './directory';
+export {
+  staffSignIn, adminTeamOverview, adminTeamMember, adminTeamAddMember, adminTeamUpdateMember, adminTeamRemoveMember,
+  adminTeamRevokeSessions, adminTeamSavePosition, adminTeamDeletePosition, adminLiftLimit, adminMyQuota,
+} from './team';
 import { refreshQuietly } from './directory';
+import { requirePerm } from './permissions';
 
 
 const tagsCol = () => db().collection('tags');
@@ -342,7 +347,7 @@ export const reportTagLost = onCall(async (req) => {
 // ===========================================================================
 
 export const adminCreateBatch = onCall({ timeoutSeconds: 120 }, async (req) => {
-  const staff = await requireStaff(req, ['production']);
+  const staff = await requirePerm(req, 'act.batch_create');
   await rateLimit(`admin:batch:${staff.uid}`, LIMITS.adminBatchPerUser[0], LIMITS.adminBatchPerUser[1]);
 
   const productType = req.data?.productType as ProductType;
@@ -467,13 +472,13 @@ export const adminCreateBatch = onCall({ timeoutSeconds: 120 }, async (req) => {
 
 export const adminSetTagStatus = onCall(async (req) => {
   // Eski panel sürümleriyle uyum için korunur; yeni panel adminTagAction kullanır.
-  const staff = await requireStaff(req, ['support']);
   const code = parseCode(req.data?.code);
   if (!code) throw new HttpsError('invalid-argument', 'Geçersiz etiket.');
   const action = req.data?.action as 'disable' | 'enable' | 'expire' | 'reset';
   if (!['disable', 'enable', 'expire', 'reset'].includes(action)) {
     throw new HttpsError('invalid-argument', 'Geçersiz işlem.');
   }
+  const staff = await requirePerm(req, ACTION_PERM[action]);
   const note = typeof req.data?.note === 'string' ? req.data.note.trim().slice(0, 300) : undefined;
   const r = await runTagAction(staff, [code], action, note);
   if (!r.done) throw new HttpsError('failed-precondition', r.skipped[0]?.reason || 'İşlem uygulanamadı.');

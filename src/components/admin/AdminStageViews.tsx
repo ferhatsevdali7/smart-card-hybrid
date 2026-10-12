@@ -3,7 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AdminLang, Icon } from './adminUi';
 import {
-  LTag, Stage, TagAction, canDo, hasPasswordProvider, listenTagsByStage, maskPlate, reauthenticate, tagAction,
+  LTag, Stage, TagAction, canDo, listenTagsByStage, maskPlate, tagAction,
 } from '../../lib/lifecycleService';
 import { downloadSingleQr } from '../../lib/qrVectorEngine';
 import {
@@ -12,6 +12,7 @@ import {
   usePaged, useSelection, useToasts,
 } from './lifecycleUi';
 import { QrPreviewDialog } from './QrPreviewDialog';
+import { CriticalDialog } from './CriticalDialog';
 
 interface BaseProps { lang: AdminLang; isDark: boolean; role: string; onOpenBatch: (batchId: string) => void }
 
@@ -575,74 +576,25 @@ const PurgeDialog: React.FC<{
   onDone: (done: number, skipped: { code: string; reason: string }[]) => void;
 }> = ({ lang, count, codes, onClose, onDone }) => {
   const L = (tr: string, en: string) => (lang === 'tr' ? tr : en);
-  const usePassword = hasPasswordProvider();
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
-
-  const submit = async () => {
-    if (busy || (usePassword && !password)) return;
-    setBusy(true);
-    setErr(null);
-    try {
-      await reauthenticate(usePassword ? password : undefined);
-    } catch (e) {
-      const code = (e as { code?: string }).code || '';
-      setErr(code.includes('wrong-password') || code.includes('invalid-credential') ? L('Şifre hatalı.', 'Wrong password.')
-        : code.includes('too-many-requests') ? L('Çok fazla deneme yapıldı. Biraz sonra tekrar deneyin.', 'Too many attempts. Try again later.')
-          : code.includes('popup-closed') ? L('Doğrulama penceresi kapatıldı.', 'The sign-in window was closed.')
-            : L('Kimlik doğrulanamadı.', 'Could not verify your identity.'));
-      setBusy(false);
-      return;
-    }
-    try {
-      const r = await tagAction(codes, 'purge');
-      onDone(r.done, r.skipped);
-    } catch (e) {
-      const msg = (e as { message?: string }).message || '';
-      setErr(msg.includes('REAUTH_REQUIRED') ? L('Doğrulama süresi doldu, tekrar deneyin.', 'Verification expired, try again.') : errorText(e, lang));
-      setBusy(false);
-    }
-  };
-
   return (
-    <Dialog
+    <CriticalDialog
+      lang={lang}
+      kind="purge"
+      units={codes.length}
       title={L(`${count} QR kalıcı olarak silinsin mi?`, `Delete ${count} QR codes permanently?`)}
-      icon="trash"
-      danger
-      onClose={() => { if (!busy) onClose(); }}
-      footer={(
-        <>
-          <button type="button" onClick={onClose} disabled={busy} className="h-9 px-4 rounded-lg text-[13px] hover:bg-[var(--a-hover)] disabled:opacity-40" style={{ color: 'var(--a-text2)' }}>{L('Vazgeç', 'Cancel')}</button>
-          <Btn variant="dangerSolid" disabled={busy || (usePassword && !password)} onClick={submit}>
-            {busy ? L('Siliniyor…', 'Deleting…') : usePassword ? L('Kalıcı olarak sil', 'Delete permanently') : L('Google ile doğrula ve sil', 'Verify with Google and delete')}
-          </Btn>
-        </>
-      )}
+      confirmLabel={L('Kalıcı olarak sil', 'Delete permanently')}
+      onClose={onClose}
+      onConfirm={async (reason) => {
+        const r = await tagAction(codes, 'purge', undefined, reason);
+        onDone(r.done, r.skipped);
+      }}
     >
       <ul className="m-0 pl-[18px] leading-[1.75]">
         <li>{L('Bu işlem geri alınamaz.', 'This cannot be undone.')}</li>
         <li>{L('Bu kodlar bir daha üretilmez.', 'These codes will never be generated again.')}</li>
         <li>{L('Basılmış bir etiket okutulursa "Bu etiket kullanıma kapalı" görünür.', 'A printed label will show as disabled when scanned.')}</li>
+        <li>{L('Süper yöneticilere bildirim gider.', 'Super admins are notified.')}</li>
       </ul>
-      {usePassword ? (
-        <label className="flex flex-col gap-1.5 mt-5 text-[12px]" style={{ color: 'var(--a-faint)' }}>
-          {L('Onaylamak için yönetici şifrenizi girin', 'Enter your password to confirm')}
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') submit(); }}
-            className="h-10 px-3 rounded-lg text-[14px] outline-none"
-            style={{ background: 'var(--a-field)', border: `1px solid ${err ? 'var(--a-danger-line)' : 'var(--a-line3)'}`, color: 'var(--a-text)' }}
-            autoFocus
-          />
-        </label>
-      ) : (
-        <p className="m-0 mt-5 text-[12.5px]" style={{ color: 'var(--a-faint)' }}>{L('Hesabınızda şifre tanımlı değil; onay için Google hesabınızla yeniden giriş yapmanız istenecek. Profil ve Ayarlar › Güvenlik bölümünden şifre belirleyebilirsiniz.', 'Your account has no password; you will be asked to sign in with Google again.')}</p>
-      )}
-      {err && <p role="alert" className="m-0 mt-3 text-[12.5px]" style={{ color: 'var(--a-danger)' }}>{err}</p>}
-    </Dialog>
+    </CriticalDialog>
   );
 };

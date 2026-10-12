@@ -26,7 +26,8 @@ import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions';
 import { ACCOUNT_DELETED, SUPER_ADMIN_EMAILS } from './config';
-import { db, maskPlate, rateLimit, requireAuth, requireStaff, sha256, StaffRole } from './helpers';
+import { db, maskPlate, rateLimit, requireAuth, sha256 } from './helpers';
+import { getQuota, recordCritical, requirePerm, requireReason, requireRecentAuth as requireFreshLogin, reserveQuota, MEMBERS } from './permissions';
 import { applyTagCounts, snap, stageOf } from './lifecycle';
 import { addDays, dayKey, dayStartMs } from './stats';
 
@@ -36,8 +37,6 @@ const DELETED = 'deleted_accounts';
 const ACCESS_LOG = 'admin_access_log';
 const META = 'stats_meta';
 
-/** Müşteri kayıtlarını görebilen roller (süper yönetici her zaman). */
-const VIEW_ROLES: StaffRole[] = ['support'];
 const PAGE = 25;
 const SEARCH_LIMIT = 50;
 const MAX_DEVICES = 10;
@@ -631,7 +630,7 @@ export async function rebuildDirectory(): Promise<{ users: number; vehicles: num
 
 /** Dizin ilk kez kurulur (panel açılınca). Yarıda kalmışsa 10 dakika sonra yeniden denenebilir. */
 export const adminEnsureDirectory = onCall({ timeoutSeconds: 540, memory: '512MiB' }, async (req) => {
-  await requireStaff(req, VIEW_ROLES);
+  await requirePerm(req, 'view.users', 'view.vehicles');
   const meta = db().collection(META).doc('directory_v1');
   const claimed = await db().runTransaction(async (tx) => {
     const m = await tx.get(meta);
@@ -666,8 +665,9 @@ export const nightlyDirectory = onSchedule(
 // Yönetici: okuma uçları (telefon her zaman maskeli)
 // ===========================================================================
 
-async function viewer(req: CallableRequest) {
-  return requireStaff(req, VIEW_ROLES);
+/** Kullanıcılar sayfası: view.users · Bağlı Araçlar sayfası: view.vehicles */
+async function viewer(req: CallableRequest, perm: 'view.users' | 'view.vehicles') {
+  return requirePerm(req, perm);
 }
 
 async function logAccess(staff: { uid: string; email: string }, kind: string, target: string): Promise<void> {
@@ -720,7 +720,7 @@ type UserFilter = 'all' | 'no_qr' | 'push_off' | 'recent';
 const USER_FILTERS: UserFilter[] = ['all', 'no_qr', 'push_off', 'recent'];
 
 export const adminListUsers = onCall({ timeoutSeconds: 60 }, async (req) => {
-  await viewer(req);
+  await viewer(req, 'view.users');
   const filter: UserFilter = USER_FILTERS.includes(req.data?.filter) ? req.data.filter : 'all';
   const after = typeof req.data?.after === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(req.data.after) ? req.data.after : null;
   const col = db().collection(USER_INDEX);
@@ -763,7 +763,7 @@ export const adminListUsers = onCall({ timeoutSeconds: 60 }, async (req) => {
 });
 
 export const adminUserStats = onCall({ timeoutSeconds: 60 }, async (req) => {
-  await viewer(req);
+  await viewer(req, 'view.users');
   const col = db().collection(USER_INDEX);
   const del = db().collection(DELETED);
   const month = Timestamp.fromMillis(istanbulMonthStart());
@@ -787,7 +787,7 @@ export const adminUserStats = onCall({ timeoutSeconds: 60 }, async (req) => {
 });
 
 export const adminListDeletedAccounts = onCall({ timeoutSeconds: 60 }, async (req) => {
-  await viewer(req);
+  await viewer(req, 'view.users');
   const after = typeof req.data?.after === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(req.data.after) ? req.data.after : null;
   let q: FirebaseFirestore.Query = db().collection(DELETED).orderBy('deletedAt', 'desc');
   if (after) {
@@ -844,7 +844,7 @@ const NOTICE_LABEL: Record<string, string> = {
 };
 
 export const adminGetUser = onCall({ timeoutSeconds: 60 }, async (req) => {
-  const staff = await viewer(req);
+  const staff = await viewer(req, 'view.users');
   const uid = typeof req.data?.uid === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(req.data.uid) ? req.data.uid : null;
   if (!uid) throw new HttpsError('invalid-argument', 'Geçersiz kullanıcı.');
   const user = await authUser(uid);
@@ -898,7 +898,10 @@ export const adminGetUser = onCall({ timeoutSeconds: 60 }, async (req) => {
 
   await logAccess(staff, 'user', uid);
   const x = idxSnap.data() || {};
+  const canDelete = staff.superAdmin || staff.perms.has('act.user_delete');
   return {
+    canDelete,
+    deleteQuota: canDelete ? await getQuota(staff, 'user_delete') : null,
     uid,
     name: x.name || user.displayName || '',
     email: (user.email || '').toLowerCase(),
@@ -962,7 +965,7 @@ async function vehicleByTagQuery(q: string): Promise<string | null> {
 }
 
 export const adminListVehicles = onCall({ timeoutSeconds: 60 }, async (req) => {
-  await viewer(req);
+  await viewer(req, 'view.vehicles');
   const filter: VehicleFilter = VEHICLE_FILTERS.includes(req.data?.filter) ? req.data.filter : 'all';
   const province = typeof req.data?.province === 'string' && /^\d{2}$/.test(req.data.province) ? req.data.province : null;
   const after = typeof req.data?.after === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(req.data.after) ? req.data.after : null;
@@ -997,7 +1000,7 @@ export const adminListVehicles = onCall({ timeoutSeconds: 60 }, async (req) => {
 });
 
 export const adminVehicleStats = onCall({ timeoutSeconds: 60 }, async (req) => {
-  await viewer(req);
+  await viewer(req, 'view.vehicles');
   const col = db().collection(VEHICLE_INDEX);
   const month = Timestamp.fromMillis(istanbulMonthStart());
   const [total, linked, none, disabled, newMonth, provSnap] = await Promise.all([
@@ -1012,7 +1015,7 @@ export const adminVehicleStats = onCall({ timeoutSeconds: 60 }, async (req) => {
 });
 
 export const adminGetVehicle = onCall({ timeoutSeconds: 60 }, async (req) => {
-  const staff = await viewer(req);
+  const staff = await viewer(req, 'view.vehicles');
   const id = typeof req.data?.vehicleId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(req.data.vehicleId) ? req.data.vehicleId : null;
   if (!id) throw new HttpsError('invalid-argument', 'Geçersiz araç.');
   const vSnap = await db().collection('vehicles').doc(id).get();
@@ -1074,4 +1077,41 @@ export const adminGetVehicle = onCall({ timeoutSeconds: 60 }, async (req) => {
     notices: noticesSnap.docs.map((n) => ({ at: toMs(n.get('createdAt')), type: String(n.get('type') || 'other'), read: n.get('read') === true })),
     history: history.slice(0, 15),
   };
+});
+
+
+// ===========================================================================
+// Yönetici: müşteri hesabını silme (kritik işlem)
+// ===========================================================================
+
+/**
+ * Yalnızca "Müşteri hesabını silebilir" yetkisi olanlar (süper yönetici her zaman).
+ * Her silmede son 5 dakika içinde şifre/Google ile yeniden giriş ve sebep zorunlu; günlük sınır vardır
+ * (süper yöneticiler muaf). Her silme süper yöneticilere bildirilir ve denetim kaydına yazılır.
+ * Ekip üyelerinin hesapları buradan silinemez.
+ */
+export const adminDeleteUser = onCall({ timeoutSeconds: 300 }, async (req) => {
+  const staff = await requirePerm(req, 'act.user_delete');
+  requireFreshLogin(req);
+  const reason = requireReason(req.data?.reason);
+  const uid = typeof req.data?.uid === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(req.data.uid) ? req.data.uid : null;
+  if (!uid) throw new HttpsError('invalid-argument', 'Geçersiz kullanıcı.');
+  if (uid === staff.uid) throw new HttpsError('failed-precondition', 'Kendi hesabınızı buradan silemezsiniz.');
+  const user = await authUser(uid);
+  const idx = await db().collection(USER_INDEX).doc(uid).get();
+  if (!user && !idx.exists) throw new HttpsError('not-found', 'Kullanıcı bulunamadı. Hesap zaten silinmiş olabilir.');
+  const email = (user?.email || idx.get('email') || '').toLowerCase();
+  if (email && (SUPER_ADMIN_EMAILS.includes(email) || (await MEMBERS().doc(email).get()).exists)) {
+    throw new HttpsError('failed-precondition', 'Ekip üyelerinin hesabı buradan silinemez. Önce Ekip ve Yetkiler sayfasından ekipten çıkarılmalı.');
+  }
+  const refund = await reserveQuota(staff, 'user_delete', 1);
+  let r: { vehicles: number; tags: number };
+  try {
+    r = await deleteAccountData(uid, { by: 'admin', byEmail: staff.email, reason, deleteAuth: true });
+  } catch (e) {
+    await refund();
+    throw e;
+  }
+  await recordCritical(staff, 'user_deleted', { targetMasked: maskEmail(email), reason, vehicles: r.vehicles, tags: r.tags });
+  return { ok: true, ...r };
 });

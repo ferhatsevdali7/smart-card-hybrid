@@ -1,7 +1,7 @@
 import { createHash, randomInt } from 'crypto';
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { CallableRequest, HttpsError } from 'firebase-functions/v2/https';
-import { CODE_ALPHABET, CODE_LENGTH, CODE_REGEX, SUPER_ADMIN_EMAILS } from './config';
+import { CODE_ALPHABET, CODE_LENGTH, CODE_REGEX } from './config';
 
 export const db = () => getFirestore();
 
@@ -17,35 +17,7 @@ export function requireAuth(req: CallableRequest): { uid: string; email: string 
   return { uid: req.auth.uid, email };
 }
 
-export type StaffRole = 'super_admin' | 'production' | 'support' | 'warehouse';
-
-/**
- * Yönetici rolünü sunucuda belirler.
- * - SUPER_ADMIN_EMAILS listesindekiler: super_admin
- * - staff_members/{email} kaydı olanlar: kayıttaki rol (e-posta doğrulanmış olmalı)
- */
-export async function getStaffRole(req: CallableRequest): Promise<StaffRole | null> {
-  if (!req.auth) return null;
-  const email = typeof req.auth.token.email === 'string' ? req.auth.token.email.toLowerCase() : null;
-  if (!email) return null;
-  if (SUPER_ADMIN_EMAILS.includes(email)) return 'super_admin';
-  if (req.auth.token.email_verified !== true) return null;
-  const snap = await db().collection('staff_members').doc(email).get();
-  if (!snap.exists) return null;
-  const data = snap.data() || {};
-  if (data.isActive === false) return null;
-  const role = data.role as StaffRole | undefined;
-  return role && ['super_admin', 'production', 'support', 'warehouse'].includes(role) ? role : null;
-}
-
-export async function requireStaff(req: CallableRequest, allowed: StaffRole[]): Promise<{ uid: string; email: string; role: StaffRole }> {
-  const { uid, email } = requireAuth(req);
-  const role = await getStaffRole(req);
-  if (!role || !email || (role !== 'super_admin' && !allowed.includes(role))) {
-    throw new HttpsError('permission-denied', 'Bu işlem için yetkiniz yok.');
-  }
-  return { uid, email, role };
-}
+// Yönetici yetkileri: bkz. permissions.ts (requirePerm, requireSuperAdmin, requireAnyStaff).
 
 // ---------------------------------------------------------------------------
 // Kod üretimi ve doğrulama

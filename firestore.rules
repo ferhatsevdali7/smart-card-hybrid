@@ -24,17 +24,40 @@ service cloud.firestore {
     }
 
     // functions/src/config.ts -> SUPER_ADMIN_EMAILS ile aynı olmalı
+    // E-posta doğrulanmış olmalı (aynı adresle doğrulanmamış bir hesap açılıp süper yönetici sayılmasın).
     function isSuperAdmin() {
-      return myEmail() in ['sevdaliferhat64@gmail.com', 'hasimturcan199@gmail.com'];
+      return myEmail() in ['sevdaliferhat64@gmail.com', 'hasimturcan199@gmail.com']
+        && request.auth.token.email_verified == true;
     }
 
+    // Ekip üyesinin kaydı (yetkiler sunucu tarafından pozisyondan kopyalanır; istemci yazamaz)
+    function staffDoc() {
+      return get(/databases/$(database)/documents/staff_members/$(myEmail())).data;
+    }
+
+    // Etkin (ya da davet edilip ilk kez giren) ekip üyesi. Askıya alınan ya da çıkarılan anında düşer.
     function isStaff() {
       return isSuperAdmin() || (
         signedIn()
         && request.auth.token.email_verified == true
         && exists(/databases/$(database)/documents/staff_members/$(myEmail()))
-        && get(/databases/$(database)/documents/staff_members/$(myEmail())).data.isActive != false
+        && staffDoc().get('status', 'active') in ['active', 'invited']
+        && staffDoc().get('isActive', true) != false
       );
+    }
+
+    // Belirli bir yetki (Ekip ve Yetkiler > pozisyon). Süper yönetici her şeyi yapar.
+    function hasPerm(p) {
+      return isSuperAdmin() || (isStaff() && staffDoc().get('perms', []).hasAny([p]));
+    }
+
+    function hasAnyPerm(ps) {
+      return isSuperAdmin() || (isStaff() && staffDoc().get('perms', []).hasAny(ps));
+    }
+
+    // QR kayıtlarını gören sayfalar
+    function seesTags() {
+      return hasAnyPerm(['view.depot', 'view.stand', 'view.bank', 'view.disabled', 'view.trash']);
     }
 
     function changedOnly(fields) {
@@ -45,8 +68,8 @@ service cloud.firestore {
     // Okuma: yalnızca etiketin sahibi (kendi etiketi) ve yöneticiler.
     // Yazma: hiç kimse (yalnızca Cloud Functions).
     match /tags/{code} {
-      allow get: if isStaff() || (signedIn() && resource.data.assignedUserId == request.auth.uid);
-      allow list: if isStaff();
+      allow get: if seesTags() || (signedIn() && resource.data.assignedUserId == request.auth.uid);
+      allow list: if seesTags();
       allow write: if false;
     }
 
@@ -104,7 +127,8 @@ service cloud.firestore {
 
     // ------------------------------------------------------------ Yönetici profili
     match /admin_profiles/{uid} {
-      allow read: if isStaff();
+      // Profil (ad, telefon, fotoğraf): kişi kendisininkini, süper yönetici herkesinkini görür.
+      allow read: if isSuperAdmin() || (isStaff() && request.auth.uid == uid);
       allow create, update: if isStaff() && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['displayName', 'phone', 'photoDataUrl', 'updatedAt'])
         && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 60
@@ -143,18 +167,27 @@ service cloud.firestore {
 
     // ------------------------------------------------------------ Üretim partileri
     match /production_batches/{batchId} {
-      allow read: if isStaff();
-      // Oluşturma sunucuda; yöneticiler yalnızca yaşam döngüsü durumunu günceller.
-      allow update: if isStaff()
-        && changedOnly(['status', 'updatedBy', 'updatedAt', 'updatedAtFirestore']);
-      allow create, delete: if false;
+      // Parti sayaçları QR sayfalarındaki ve menüdeki sayılar için okunur.
+      allow read: if seesTags();
+      // Tüm değişiklikler sunucuda (Cloud Functions) yapılır.
+      allow write: if false;
     }
 
     // ------------------------------------------------------------ Personel
     match /staff_members/{email} {
-      allow read: if isStaff();
-      allow write: if isSuperAdmin();
+      // Herkes yalnızca kendi kaydını okur (panel yetkileri anında güncellensin, askıya alınınca çıkış yapılsın diye).
+      // Ekip listesi ve tüm değişiklikler yalnızca sunucu üzerinden (süper yönetici).
+      allow get: if signedIn() && email == myEmail();
+      allow list: if false;
+      allow write: if false;
     }
+
+    // Pozisyonlar ve kritik işlem sayaçları/bildirimleri: yalnızca sunucu
+    match /staff_positions/{id}      { allow read, write: if false; }
+    match /critical_usage/{id}       { allow read, write: if false; }
+    match /critical_overrides/{id}   { allow read, write: if false; }
+    match /admin_notifications/{id}  { allow read, write: if false; }
+    match /admin_audit/{id}          { allow read, write: if false; }
 
     // ------------------------------------------------------------ Kullanıcı profili
     match /users/{userId} {
@@ -197,14 +230,15 @@ service cloud.firestore {
 
     // ------------------------------------------------------------ Eski sistem (salt okunur)
     match /qr_registry/{tagId} {
-      allow read: if isStaff();
+      allow read: if hasPerm('view.depot');
       allow write: if false;
     }
 
     // ------------------------------------------------------------ Kampanya işaretleri (Genel Bakış grafiği)
     match /campaigns/{id} {
-      allow read, delete: if isStaff();
-      allow create: if isStaff()
+      allow read: if hasPerm('view.overview');
+      allow delete: if hasPerm('act.campaigns');
+      allow create: if hasPerm('act.campaigns')
         && request.resource.data.keys().hasOnly(['title', 'start', 'end', 'createdBy', 'createdAt'])
         && request.resource.data.title is string
         && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 60
@@ -217,7 +251,8 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------ Sunucuya özel
-    match /tag_events/{id}   { allow read: if isStaff(); allow write: if false; }
+    // Denetim kaydı: herkesi Denetim Kayıtları yetkisi olan görür; herkes kendi işlemlerini görür.
+    match /tag_events/{id}   { allow read: if hasPerm('view.audit') || (isStaff() && resource.data.by == request.auth.uid); allow write: if false; }
     match /rate_limits/{id}  { allow read, write: if false; }
     match /counters/{id}     { allow read, write: if false; }
     // İstatistik sayaçları ve şüpheli okutma uyarıları yalnızca sunucuda okunur/yazılır.

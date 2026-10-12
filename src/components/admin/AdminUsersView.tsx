@@ -3,14 +3,15 @@
 
 import React, { useEffect, useState } from 'react';
 import { AdminLang, Icon } from './adminUi';
-import { Note, TableWrap, Th, Td, stageColor, stageLabel } from './lifecycleUi';
+import { Btn, Note, TableWrap, Th, Td, stageColor, stageLabel, useToasts } from './lifecycleUi';
+import { CriticalDialog } from './CriticalDialog';
 import {
   BackLink, BigSearch, Card, ColorDot, ErrorPanel, InfoRow, Initials, NoAccess, Pager, Plate, SkeletonRows,
   StatCards, StatusDot, Tabs, Tag, fmtAgo, fmtDay, nfFor, useCursorPages, useDebounced, useRemote,
 } from './customerUi';
 import {
   DISABLE_REASON, TagSummary, UserFilter, activityText, canViewCustomers, ensureDirectory, getUser, initials,
-  listDeleted, listUsers, providerLabel, userStats,
+  deleteUser, listDeleted, listUsers, providerLabel, userStats,
 } from '../../lib/directoryService';
 
 interface Props {
@@ -25,12 +26,23 @@ interface Props {
 
 export const AdminUsersView: React.FC<Props> = (p) => {
   const L = (tr: string, en: string) => (p.lang === 'tr' ? tr : en);
+  // Bir hesap silinince liste ve sayılar yeniden yüklensin
+  const [version, setVersion] = useState(0);
+  const toasts = useToasts();
   if (!canViewCustomers(p.role)) return <NoAccess lang={p.lang} title={L('Kullanıcılar', 'Users')} />;
   return (
     <>
       {/* Liste detay açıkken de yerinde kalır: geri dönünce arama ve sayfa kaybolmaz. */}
-      <div className={p.detailUid ? 'hidden' : ''}><UsersList {...p} /></div>
-      {p.detailUid && <UserDetailView key={p.detailUid} {...p} uid={p.detailUid} />}
+      <div className={p.detailUid ? 'hidden' : ''}><UsersList {...p} version={version} /></div>
+      {p.detailUid && (
+        <UserDetailView
+          key={p.detailUid}
+          {...p}
+          uid={p.detailUid}
+          onDeleted={(text) => { setVersion((v) => v + 1); toasts.show(text); p.onCloseUser(); }}
+        />
+      )}
+      {toasts.node}
     </>
   );
 };
@@ -39,7 +51,7 @@ export const AdminUsersView: React.FC<Props> = (p) => {
 // LİSTE
 // =====================================================================
 
-const UsersList: React.FC<Props> = ({ lang, onOpenUser }) => {
+const UsersList: React.FC<Props & { version: number }> = ({ lang, onOpenUser, version }) => {
   const L = (tr: string, en: string) => (lang === 'tr' ? tr : en);
   const nf = nfFor(lang);
   const [ready, setReady] = useState(false);
@@ -54,16 +66,16 @@ const UsersList: React.FC<Props> = ({ lang, onOpenUser }) => {
     return () => { alive = false; };
   }, []);
 
-  const stats = useRemote(() => userStats(), `stats|${ready}`);
+  const stats = useRemote(() => userStats(), `stats|${ready}|${version}`);
   const pages = useCursorPages(`${dq}|${filter}`);
   const list = useRemote(
     () => (ready ? listUsers(dq, filter, pages.cursor) : Promise.resolve(null)),
-    `${ready}|${dq}|${filter}|${pages.cursor}`,
+    `${ready}|${dq}|${filter}|${pages.cursor}|${version}`,
   );
   const delPages = useCursorPages('deleted');
   const deleted = useRemote(
     () => (ready && tab === 'deleted' ? listDeleted(delPages.cursor) : Promise.resolve(null)),
-    `${ready}|${tab}|${delPages.cursor}`,
+    `${ready}|${tab}|${delPages.cursor}|${version}`,
   );
 
   const s = stats.data;
@@ -305,11 +317,12 @@ export function tagStatusText(t: TagSummary | null, lang: AdminLang): { text: st
   return { text: stageLabel(t.stage, lang), color: t.stage };
 }
 
-const UserDetailView: React.FC<Props & { uid: string }> = ({ lang, isDark, uid, onCloseUser, onOpenVehicle, onOpenUser }) => {
+const UserDetailView: React.FC<Props & { uid: string; onDeleted: (text: string) => void }> = ({ lang, isDark, uid, onCloseUser, onOpenVehicle, onOpenUser, onDeleted }) => {
   const L = (tr: string, en: string) => (lang === 'tr' ? tr : en);
   const nf = nfFor(lang);
   const r = useRemote(() => getUser(uid), uid);
   const u = r.data;
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Üst çubuktaki konum yazısı yüklenen adla güncellensin
   useEffect(() => { if (u) onOpenUser(uid, u.name || u.email); }, [u?.uid]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -331,9 +344,12 @@ const UserDetailView: React.FC<Props & { uid: string }> = ({ lang, isDark, uid, 
                 {u.email} · {L(`${fmtDay(u.createdAt, lang)} tarihinden beri üye`, `Member since ${fmtDay(u.createdAt, lang)}`)}
               </div>
             </div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               {u.isStaff && <Tag>{L('Yönetici', 'Staff')}</Tag>}
               {u.disabled ? <Tag tone="warn">{L('Hesap kapalı', 'Account disabled')}</Tag> : <Tag tone="ok">{L('Hesap etkin', 'Active')}</Tag>}
+              {u.canDelete && !u.isStaff && (
+                <Btn small variant="danger" icon="userX" onClick={() => setConfirmDelete(true)}>{L('Hesabı sil', 'Delete account')}</Btn>
+              )}
             </div>
           </div>
 
@@ -449,6 +465,27 @@ const UserDetailView: React.FC<Props & { uid: string }> = ({ lang, isDark, uid, 
           <div className="mt-8">
             <Note>{L('Telefon numaraları güvenlik gereği yalnızca son iki hanesiyle gösterilir; tam numaraya panelden erişilemez. Bu sayfayı açmanız erişim kaydına yazılır.', 'Phone numbers only show their last two digits. Opening this page is logged.')}</Note>
           </div>
+          {confirmDelete && (
+            <CriticalDialog
+              lang={lang}
+              kind="user_delete"
+              units={1}
+              title={L(`${u.name || u.email} hesabı silinsin mi?`, `Delete ${u.name || u.email}?`)}
+              confirmLabel={L('Hesabı sil', 'Delete account')}
+              onClose={() => setConfirmDelete(false)}
+              onConfirm={async (reason) => {
+                const res = await deleteUser(u.uid, reason);
+                setConfirmDelete(false);
+                onDeleted(L(`Hesap silindi. ${res.tags ? `${res.tags} QR kalıcı olarak kapatıldı.` : ''}`, 'Account deleted.'));
+              }}
+            >
+              <ul className="m-0 pl-[18px] leading-[1.75]">
+                <li>{L(`${u.summary.vehicles} araç, bildirimleri ve kişisel bilgileri silinir. Geri alınamaz.`, 'Vehicles, notices and personal data are deleted. This cannot be undone.')}</li>
+                <li>{u.summary.tags ? L(`${u.summary.tags} QR kalıcı olarak kapanır ve Devre Dışı sayfasına düşer.`, 'Linked QR codes are closed for good.') : L('Hesaba bağlı QR yok.', 'No linked QR codes.')}</li>
+                <li>{L('Silinmiş hesaplarda yalnızca gizlenmiş e-posta, tarih ve sebep kalır. Süper yöneticilere bildirim gider.', 'Only the masked email, date and reason are kept. Super admins are notified.')}</li>
+              </ul>
+            </CriticalDialog>
+          )}
         </>
       )}
     </div>

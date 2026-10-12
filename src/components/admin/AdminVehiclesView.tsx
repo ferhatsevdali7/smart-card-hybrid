@@ -12,7 +12,7 @@ import { tagStatusText } from './AdminUsersView';
 import { QrPreviewDialog } from './QrPreviewDialog';
 import type { LTag } from '../../lib/lifecycleService';
 import {
-  DISABLE_REASON, NOTICE_TEXT, PROVINCES, TagState, VehicleDetail, VehicleFilter, activityText, canViewCustomers,
+  DISABLE_REASON, NOTICE_TEXT, PROVINCES, TagState, VehicleDetail, VehicleFilter, activityText, canViewVehicles,
   ensureDirectory, getVehicle, initials, listVehicles, normPlate, provinceName, vehicleStats,
 } from '../../lib/directoryService';
 
@@ -28,7 +28,7 @@ interface Props {
 
 export const AdminVehiclesView: React.FC<Props> = (p) => {
   const L = (tr: string, en: string) => (p.lang === 'tr' ? tr : en);
-  if (!canViewCustomers(p.role)) return <NoAccess lang={p.lang} title={L('Bağlı Araçlar', 'Linked Vehicles')} />;
+  if (!canViewVehicles()) return <NoAccess lang={p.lang} title={L('Bağlı Araçlar', 'Linked Vehicles')} />;
   return (
     <>
       <div className={p.detailId ? 'hidden' : ''}><VehiclesList {...p} /></div>

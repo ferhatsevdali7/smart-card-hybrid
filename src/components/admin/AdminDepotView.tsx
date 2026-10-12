@@ -53,8 +53,12 @@ export const AdminDepotView: React.FC<Props> = ({ lang, isDark, role, batches, b
     return matchesSearch(q, b.id, b.notes);
   }), [list, filter, q]);
 
-  const deletableIds = filtered.filter(batchDeletable).map((b) => b.id);
-  const sel = useSelection(list.filter(batchDeletable).map((b) => b.id));
+  // Çöpe atma yetkisi varsa yalnızca silinebilir partiler seçilir; yalnızca ZIP yetkisi varsa hepsi seçilebilir.
+  const canTrash = canDo(role, 'trash');
+  const canZip = canDo(role, 'zip');
+  const selectable = (b: LBatch) => (canTrash ? batchDeletable(b) : canZip);
+  const deletableIds = filtered.filter(selectable).map((b) => b.id);
+  const sel = useSelection(list.filter(selectable).map((b) => b.id));
   const selectedBatches = list.filter((b) => sel.selected.has(b.id));
   const selectedQr = selectedBatches.reduce((a, b) => a + (b.counts ? b.counts.in_stock + b.counts.on_sale : 0), 0);
   const allSelected = deletableIds.length > 0 && deletableIds.every((id) => sel.selected.has(id));
@@ -106,7 +110,7 @@ export const AdminDepotView: React.FC<Props> = ({ lang, isDark, role, batches, b
       <PageHeader
         title={L('QR Deposu', 'QR Stock')}
         sub={L("Üretilen bütün partiler ve içlerindeki QR'ların şu anki aşaması", 'All production batches and where each QR currently is')}
-        right={canDo(role, 'release') && (
+        right={canDo(role, 'batch_create') && (
           <Btn variant="primary" icon="plus" onClick={() => setShowNew(true)}>{L('Yeni parti üret', 'New batch')}</Btn>
         )}
       />
@@ -125,7 +129,7 @@ export const AdminDepotView: React.FC<Props> = ({ lang, isDark, role, batches, b
             icon="box"
             title={L('Henüz parti yok', 'No batches yet')}
             text={L('İlk partiyi ürettiğinizde QR\'lar burada depoda bekler. Satışa çıkarana kadar müşteriler bağlayamaz.', 'Produced QR codes wait here until you release them for sale.')}
-            action={canDo(role, 'release') && <Btn variant="primary" icon="plus" onClick={() => setShowNew(true)}>{L('Yeni parti üret', 'New batch')}</Btn>}
+            action={canDo(role, 'batch_create') && <Btn variant="primary" icon="plus" onClick={() => setShowNew(true)}>{L('Yeni parti üret', 'New batch')}</Btn>}
           />
         </div>
       )}
@@ -169,7 +173,7 @@ export const AdminDepotView: React.FC<Props> = ({ lang, isDark, role, batches, b
                 <thead>
                   <tr>
                     <Th w={28}>
-                      {canDo(role, 'trash') && (
+                      {(canTrash || canZip) && (
                         <Checkbox
                           checked={allSelected}
                           indeterminate={deletableIds.some((id) => sel.selected.has(id))}
@@ -193,12 +197,12 @@ export const AdminDepotView: React.FC<Props> = ({ lang, isDark, role, batches, b
                 <tbody>
                   {filtered.map((b) => {
                     const c = b.counts;
-                    const deletable = batchDeletable(b);
+                    const deletable = selectable(b);
                     const n = (v: number) => (v ? nf.format(v) : <Dash />);
                     return (
                       <tr key={b.id} onClick={() => onOpenBatch(b.id)} className="cursor-pointer transition-colors hover:bg-[var(--a-hover)]" style={{ background: sel.selected.has(b.id) ? 'var(--a-hover)' : undefined }}>
                         <Td w={28}>
-                          {canDo(role, 'trash') && (
+                          {(canTrash || canZip) && (
                             <Checkbox
                               checked={sel.selected.has(b.id)}
                               disabled={!deletable}
@@ -254,8 +258,8 @@ export const AdminDepotView: React.FC<Props> = ({ lang, isDark, role, batches, b
         info={<span className="text-[12.5px]" style={{ color: 'var(--a-muted)' }}>{zipProgress || L(`${nf.format(selectedQr)} QR (depoda ve standda)`, `${selectedQr} QR codes`)}</span>}
         onClear={sel.clear}
       >
-        <Btn icon="zip" onClick={downloadZip} disabled={!!zipProgress}>{L('ZIP indir', 'Download ZIP')}</Btn>
-        <Btn icon="trash" variant="danger" onClick={() => setConfirmTrash(true)} disabled={!!zipProgress}>{L('Çöpe at', 'Move to trash')}</Btn>
+        {canDo(role, 'zip') && <Btn icon="zip" onClick={downloadZip} disabled={!!zipProgress}>{L('ZIP indir', 'Download ZIP')}</Btn>}
+        {canDo(role, 'trash') && <Btn icon="trash" variant="danger" onClick={() => setConfirmTrash(true)} disabled={!!zipProgress}>{L('Çöpe at', 'Move to trash')}</Btn>}
       </SelectionBar>
 
       {confirmTrash && (

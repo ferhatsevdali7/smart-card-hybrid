@@ -1,18 +1,6 @@
-﻿import { 
-  collection, doc, getDoc, getDocs, setDoc, updateDoc, 
-  deleteDoc, query, where, serverTimestamp, onSnapshot 
-} from 'firebase/firestore';
-import { db, auth } from './firebase';
-import { StaffMember, StaffRole } from '../types/card';
-import { signInWithEmailAndPassword } from 'firebase/auth';
-
-const STAFF_COLLECTION = 'staff_members';
-
-// Support comma-separated Super Admin Emails from Environment variable
-const ENV_SUPER_ADMINS = (import.meta.env.VITE_SUPER_ADMIN_EMAIL || '')
-  .split(',')
-  .map((e: string) => e.trim().toLowerCase())
-  .filter(Boolean);
+﻿import { auth } from './firebase';
+import { sendEmailVerification, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { staffSignInFn } from './functionsClient';
 
 // Client-side rate limiting store
 const RATE_LIMIT_KEY = 'hyb_adm_rate_limits';
@@ -59,83 +47,45 @@ export function resetRateLimit(email: string): void {
   }
 }
 
+export interface StaffSignIn { email: string; superAdmin: boolean; positionName: string | null; perms: string[] }
+
 /**
- * Check if a given email has Super Admin / Staff privileges
+ * Giriş yapmış kişinin ekip üyeliğini ve yetkilerini SUNUCUDAN alır (istemci tarafında liste tutulmaz).
+ * Davetli kişi ilk girişte etkinleşir. Ekipte değilse, askıdaysa ya da e-postası doğrulanmamışsa hata verir.
  */
-export async function checkUserStaffRole(email: string | null | undefined): Promise<StaffMember | null> {
-  if (!email) return null;
-  const cleanEmail = email.trim().toLowerCase();
-
-  // 1. Dynamic Environment Whitelist Check (Full Access Super Admin)
-  if (ENV_SUPER_ADMINS.includes(cleanEmail)) {
-    return {
-      email: cleanEmail,
-      name: 'Super Admin (Yönetici)',
-      role: 'super_admin',
-      isActive: true,
-      invitedBy: 'system',
-      createdAt: new Date().toISOString()
-    };
-  }
-
-  // 2. Database Whitelist Check
+export async function fetchStaffAccess(): Promise<StaffSignIn> {
+  const email = auth.currentUser?.email?.toLowerCase() || '';
   try {
-    const docRef = doc(db, STAFF_COLLECTION, cleanEmail);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      const data = snap.data() as StaffMember;
-      if (data.isActive) {
-        return data;
-      }
+    const r = await staffSignInFn({});
+    return { email, superAdmin: r.superAdmin, positionName: r.positionName, perms: r.perms };
+  } catch (e) {
+    const msg = String((e as { message?: string }).message || '');
+    if (msg.includes('SUSPENDED')) throw new Error('Hesabınız askıya alınmış. Süper yöneticiyle görüşün.');
+    if (msg.includes('EMAIL_NOT_VERIFIED')) {
+      if (auth.currentUser) await sendEmailVerification(auth.currentUser).catch(() => undefined);
+      throw new Error('E-posta adresiniz doğrulanmamış. Gelen kutunuza doğrulama bağlantısı gönderildi; onayladıktan sonra tekrar giriş yapın.');
     }
-  } catch (error) {
-    console.warn('Staff role check error:', error);
+    if (msg.includes('NOT_STAFF')) throw new Error(`"${email}" adresi yetkili ekip listesinde değil.`);
+    throw new Error('Yetkiler alınamadı. İnternet bağlantınızı kontrol edip tekrar deneyin.');
   }
-
-  return null;
 }
 
-/**
- * Verify Staff credentials using Firebase Auth + RBAC whitelist check
- */
-export async function verifyStaffCredentials(email: string, password: string): Promise<StaffMember> {
+/** E-posta/şifre ile giriş + ekip üyeliği kontrolü. Ekipte değilse oturum kapatılır. */
+export async function verifyStaffCredentials(email: string, password: string): Promise<StaffSignIn> {
   const cleanEmail = email.trim().toLowerCase();
-
-  // 1. Check if email is in the admin whitelist first
-  const staff = await checkUserStaffRole(cleanEmail);
-  if (!staff || !staff.isActive) {
-    throw new Error('403: Bu e-posta adresi yetkili yönetici listesinde bulunmuyor.');
-  }
-
-  // 2. Sign in via Firebase Auth to verify credentials
   try {
     await signInWithEmailAndPassword(auth, cleanEmail, password);
   } catch (authError: any) {
-    if (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential') {
-      throw new Error('Yönetici şifresi hatalı.');
+    if (authError.code === 'auth/wrong-password' || authError.code === 'auth/invalid-credential' || authError.code === 'auth/user-not-found') {
+      throw new Error('E-posta ya da şifre hatalı.');
     }
-    if (authError.code === 'auth/user-not-found') {
-      throw new Error('Bu yönetici e-posta hesabı Firebase kimlik doğrulama sisteminde henüz oluşturulmamış.');
-    }
-    throw new Error(`Kimlik doğrulama hatası: ${authError.message}`);
+    if (authError.code === 'auth/too-many-requests') throw new Error('Çok fazla deneme yapıldı. Biraz sonra tekrar deneyin.');
+    throw new Error('Giriş yapılamadı. Lütfen tekrar deneyin.');
   }
-
-  return staff;
-}
-
-/**
- * Enforce Super Admin permissions before performing sensitive admin operations
- */
-export async function assertSuperAdmin(): Promise<StaffMember> {
-  const currentEmail = auth.currentUser?.email;
-  if (!currentEmail) {
-    throw new Error('401: Oturum açılmamış.');
+  try {
+    return await fetchStaffAccess();
+  } catch (e) {
+    await signOut(auth).catch(() => undefined);
+    throw e;
   }
-
-  const profile = await checkUserStaffRole(currentEmail);
-  if (!profile || !profile.isActive) {
-    throw new Error('403: Bu işlem için yönetim yetkisine sahip değilsiniz.');
-  }
-
-  return profile;
 }

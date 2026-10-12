@@ -10,7 +10,7 @@ import {
 } from './functionsClient';
 import { generateLogodQrSvg } from './qrVectorEngine';
 import { buildZip, downloadBlob, ZipEntry } from './zip';
-import type { StaffRole } from '../types/card';
+import { has } from './access';
 
 export type Stage = 'in_stock' | 'on_sale' | 'active' | 'disabled' | 'expired' | 'trashed';
 export const STAGES: Stage[] = ['in_stock', 'on_sale', 'active', 'disabled', 'expired', 'trashed'];
@@ -180,10 +180,10 @@ export async function fetchBatchTags(batchIds: string[]): Promise<LTag[]> {
 export interface ActionResult { done: number; skipped: { code: string; reason: string }[] }
 
 /** Seçili QR'lara işlem uygular (500'lük parçalar halinde). */
-export async function tagAction(codes: string[], action: TagAction, note?: string): Promise<ActionResult> {
+export async function tagAction(codes: string[], action: TagAction, note?: string, reason?: string): Promise<ActionResult> {
   const out: ActionResult = { done: 0, skipped: [] };
   for (let i = 0; i < codes.length; i += 500) {
-    const r = await adminTagActionFn({ codes: codes.slice(i, i + 500), action, note });
+    const r = await adminTagActionFn({ codes: codes.slice(i, i + 500), action, note, reason });
     out.done += r.done;
     out.skipped.push(...r.skipped);
   }
@@ -213,23 +213,29 @@ export async function ensureLifecycle(): Promise<void> {
 
 // ------------------------------------------------------------------ yetkiler (sunucudaki kuralların aynısı)
 
-const ACTION_ROLES: Record<TagAction, StaffRole[]> = {
-  release: ['production', 'warehouse'],
-  unrelease: ['production', 'warehouse'],
-  mark_printed: ['production', 'warehouse'],
-  unmark_printed: ['production', 'warehouse'],
-  trash: ['production'],
-  restore: ['production'],
-  disable: ['support'],
-  enable: ['support'],
-  expire: ['support'],
-  reset: ['support'],
-  purge: [],
+/** Her işlemin gerektirdiği yetki (sunucudaki ACTION_PERM ile aynı) */
+export const ACTION_PERM: Record<TagAction, string> = {
+  release: 'act.release',
+  unrelease: 'act.unrelease',
+  mark_printed: 'act.print',
+  unmark_printed: 'act.print',
+  trash: 'act.trash',
+  restore: 'act.restore',
+  disable: 'act.disable',
+  enable: 'act.enable',
+  expire: 'act.expire',
+  reset: 'act.reset',
+  purge: 'act.purge',
 };
 
-export function canDo(role: StaffRole | string | undefined, action: TagAction): boolean {
-  if (role === 'super_admin') return true;
-  return ACTION_ROLES[action].includes(role as StaffRole);
+/**
+ * Bu işlem düğmesi gösterilsin mi. Yetkiler oturum açan kişinin pozisyonundan gelir (lib/access).
+ * İlk parametre eski kullanım için korunur; asıl denetim her istekte sunucudadır.
+ */
+export function canDo(_role: unknown, action: TagAction | 'batch_create' | 'zip'): boolean {
+  if (action === 'batch_create') return has('act.batch_create');
+  if (action === 'zip') return has('act.zip');
+  return has(ACTION_PERM[action]);
 }
 
 // ------------------------------------------------------------------ kalıcı silme için yeniden doğrulama

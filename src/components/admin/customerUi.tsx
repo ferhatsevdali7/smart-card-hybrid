@@ -181,14 +181,14 @@ export const ErrorPanel: React.FC<{ error: unknown; lang: AdminLang; onRetry?: (
   </div>
 );
 
-export const NoAccess: React.FC<{ lang: AdminLang; title: string }> = ({ lang, title }) => (
+export const NoAccess: React.FC<{ lang: AdminLang; title: string; note?: string }> = ({ lang, title, note }) => (
   <div className="max-w-[1180px] mx-auto">
     <h1 className="m-0 text-[24px] font-medium tracking-[-0.3px]">{title}</h1>
     <div className="mt-10 flex flex-col items-center text-center gap-2 py-16 px-4 rounded-xl" style={{ border: '1px dashed var(--a-line2)' }}>
       <span style={{ color: 'var(--a-faint)' }}><Icon name="lock" size={26} /></span>
       <div className="text-[14px] mt-1">{lang === 'tr' ? 'Bu sayfa için yetkiniz yok' : 'You do not have access to this page'}</div>
       <p className="m-0 text-[12.5px] max-w-md" style={{ color: 'var(--a-faint)' }}>
-        {lang === 'tr' ? 'Müşteri kayıtlarını yalnızca destek ekibi ve süper yöneticiler görebilir.' : 'Only support staff and super admins can see customer records.'}
+        {note || (lang === 'tr' ? 'Pozisyonunuzda bu sayfayı görme yetkisi yok. Erişim gerekiyorsa süper yöneticiye başvurun.' : 'Your position does not include this page. Ask a super admin if you need access.')}
       </p>
     </div>
   </div>

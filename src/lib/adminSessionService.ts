@@ -4,7 +4,9 @@ import { StaffRole } from '../types/card';
 
 export interface AdminSession {
   email: string;
+  /** 'super_admin' ya da 'staff' (asıl yetkiler sunucudan, bkz. lib/access) */
   role: StaffRole;
+  positionName?: string | null;
   token: string;
   loginTime: number;
 }
@@ -13,10 +15,11 @@ const ADMIN_SESSION_KEY = 'hyb_adm_sess_v2';
 const ADMIN_THEME_KEY = 'hyb_adm_theme';
 const ADMIN_LANG_KEY = 'hyb_adm_lang';
 
-export function setAdminSession(email: string, role: StaffRole): void {
+export function setAdminSession(email: string, role: StaffRole, positionName: string | null = null): void {
   const session: AdminSession = {
     email: email.toLowerCase().trim(),
     role,
+    positionName,
     token: `adm_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
     loginTime: Date.now()
   };

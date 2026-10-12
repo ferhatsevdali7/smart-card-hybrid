@@ -2,10 +2,10 @@
 // Veriler yalnızca Cloud Functions üzerinden gelir; telefon numarası her zaman maskelidir.
 
 import {
-  adminEnsureDirectoryFn, adminGetUserFn, adminGetVehicleFn, adminListDeletedAccountsFn,
+  adminDeleteUserFn, adminEnsureDirectoryFn, adminGetUserFn, adminGetVehicleFn, adminListDeletedAccountsFn,
   adminListUsersFn, adminListVehiclesFn, adminUserStatsFn, adminVehicleStatsFn,
 } from './functionsClient';
-import type { StaffRole } from '../types/card';
+import { has } from './access';
 
 export type UserFilter = 'all' | 'no_qr' | 'push_off' | 'recent';
 export type VehicleFilter = 'all' | 'linked' | 'none' | 'disabled';
@@ -37,6 +37,8 @@ export interface TagSummary {
 }
 export interface ActivityItem { at: number | null; kind: string; detail: string }
 export interface UserDetail {
+  canDelete: boolean;
+  deleteQuota: { used: number; limit: number | null; remaining: number | null; lifted: boolean } | null;
   uid: string; name: string; email: string; provider: string; emailVerified: boolean; disabled: boolean; isStaff: boolean;
   createdAt: number | null; lastSignInAt: number | null; phoneMasked: string | null; pushEnabled: boolean; homeScreen: boolean | null;
   summary: { vehicles: number; tags: number; scans30: number; notices30: number };
@@ -81,10 +83,17 @@ export const listVehicles = (q: string, filter: VehicleFilter, province: string 
   adminListVehiclesFn({ q: q.trim() || undefined, filter, province, after });
 export const vehicleStats = () => adminVehicleStatsFn({});
 export const getVehicle = (vehicleId: string) => adminGetVehicleFn({ vehicleId });
+/** Kritik işlem: şifre/Google ile yeniden giriş yapılmış olmalı, sebep zorunlu */
+export const deleteUser = (uid: string, reason: string) => adminDeleteUserFn({ uid, reason });
 
-/** Müşteri kayıtlarını görebilen roller (sunucudaki kuralla aynı). */
-export function canViewCustomers(role: StaffRole | string): boolean {
-  return role === 'super_admin' || role === 'support';
+/** Kullanıcılar sayfası (sunucuda view.users ile korunur) */
+export function canViewCustomers(_role?: unknown): boolean {
+  return has('view.users');
+}
+
+/** Bağlı Araçlar sayfası (sunucuda view.vehicles ile korunur) */
+export function canViewVehicles(): boolean {
+  return has('view.vehicles');
 }
 
 // ------------------------------------------------------------------ görüntüleme

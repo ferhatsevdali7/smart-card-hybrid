@@ -104,8 +104,8 @@ export function useAdminFonts(): void {
 export const MONO = "'IBM Plex Mono', ui-monospace, monospace";
 
 export function roleLabel(role: StaffRole | string, lang: AdminLang): string {
-  const tr: Record<string, string> = { super_admin: 'Süper Yönetici', production: 'Üretim Sorumlusu', support: 'Destek', warehouse: 'Depo' };
-  const en: Record<string, string> = { super_admin: 'Super Admin', production: 'Production', support: 'Support', warehouse: 'Warehouse' };
+  const tr: Record<string, string> = { super_admin: 'Süper Yönetici', staff: 'Ekip üyesi', production: 'Üretim Sorumlusu', support: 'Destek', warehouse: 'Depo' };
+  const en: Record<string, string> = { super_admin: 'Super Admin', staff: 'Team member', production: 'Production', support: 'Support', warehouse: 'Warehouse' };
   return (lang === 'tr' ? tr : en)[role] || String(role);
 }
 

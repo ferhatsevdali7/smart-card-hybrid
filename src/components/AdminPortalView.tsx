@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, Mail, AlertCircle, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
-import { verifyStaffCredentials, checkRateLimit, recordFailedAttempt, resetRateLimit, checkUserStaffRole } from '../lib/staffAuthService';
+import { Lock, Mail, AlertCircle, ArrowRight, Loader2, CheckCircle2 } from 'lucide-react';
+import { verifyStaffCredentials, checkRateLimit, recordFailedAttempt, resetRateLimit, fetchStaffAccess } from '../lib/staffAuthService';
+import { signOut } from 'firebase/auth';
+import { auth } from '../lib/firebase';
+import { setAccess } from '../lib/access';
 import { setAdminSession } from '../lib/adminSessionService';
 import { loginWithGoogle, resetPassword } from '../lib/authService';
 
@@ -27,15 +30,17 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onLoginSuccess
       }
 
       const cleanEmail = user.email.toLowerCase().trim();
-      const staff = await checkUserStaffRole(cleanEmail);
-
-      if (!staff || !staff.isActive) {
-        throw new Error(`Yetkisiz Hesap (403): "${cleanEmail}" adresi Super Admin veya yetkili personel listesinde kayıtlı değil.`);
+      let staff;
+      try {
+        staff = await fetchStaffAccess();
+      } catch (e) {
+        await signOut(auth).catch(() => undefined);
+        throw e;
       }
-
       resetRateLimit(cleanEmail);
-      setAdminSession(staff.email, staff.role);
-      onLoginSuccess(staff.email);
+      setAccess({ superAdmin: staff.superAdmin, perms: staff.perms, positionName: staff.positionName });
+      setAdminSession(cleanEmail, staff.superAdmin ? 'super_admin' : 'staff', staff.positionName);
+      onLoginSuccess(cleanEmail);
     } catch (err: any) {
       setErrorMsg(err.message || 'Google ile giriş başarısız oldu.');
     } finally {
@@ -62,11 +67,11 @@ export const AdminPortalView: React.FC<AdminPortalViewProps> = ({ onLoginSuccess
     try {
       const staff = await verifyStaffCredentials(targetEmail, password);
       resetRateLimit(targetEmail);
-      
+      setAccess({ superAdmin: staff.superAdmin, perms: staff.perms, positionName: staff.positionName });
       // İzole Admin Oturumunu kaydet (F5 koruması)
-      setAdminSession(staff.email, staff.role);
+      setAdminSession(targetEmail, staff.superAdmin ? 'super_admin' : 'staff', staff.positionName);
 
-      onLoginSuccess(staff.email);
+      onLoginSuccess(targetEmail);
     } catch (err: any) {
       recordFailedAttempt(targetEmail);
       setErrorMsg(err.message || 'Yetkilendirme başarısız. Yetkili değilsiniz veya şifre hatalı.');

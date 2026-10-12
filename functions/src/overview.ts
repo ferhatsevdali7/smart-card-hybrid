@@ -10,7 +10,8 @@ import { getAuth, UserRecord } from 'firebase-admin/auth';
 import { Timestamp } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { SUPER_ADMIN_EMAILS, VEHICLE_PRODUCT } from './config';
-import { db, requireStaff } from './helpers';
+import { db } from './helpers';
+import { requirePerm } from './permissions';
 import {
   addDays, countersStartDay, dayKey, daysBetween, dayStartMs, ensureBackfill, readDailyStats,
 } from './stats';
@@ -76,7 +77,7 @@ async function listAllUsers(): Promise<UserRecord[]> {
 }
 
 export const adminOverview = onCall({ region: 'europe-west1', timeoutSeconds: 60, memory: '512MiB' }, async (req) => {
-  await requireStaff(req, ['production', 'support', 'warehouse']);
+  await requirePerm(req, 'view.overview');
 
   // ------------------------------------------------------------- dönem
   const range = (req.data?.range || '30d') as RangeKey;
@@ -348,7 +349,7 @@ export const adminOverview = onCall({ region: 'europe-west1', timeoutSeconds: 60
 const MAX_PERIODS = 6;
 
 export const adminPeriodSeries = onCall({ region: 'europe-west1', timeoutSeconds: 60, memory: '512MiB' }, async (req) => {
-  await requireStaff(req, ['production', 'support', 'warehouse']);
+  await requirePerm(req, 'view.overview');
   const raw = Array.isArray(req.data?.periods) ? req.data.periods : [];
   if (!raw.length || raw.length > MAX_PERIODS) {
     throw new HttpsError('invalid-argument', `1 ile ${MAX_PERIODS} arasında dönem seçilmelidir.`);

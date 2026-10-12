@@ -30,7 +30,7 @@ export const adminSetTagStatusFn = call<
 >('adminSetTagStatus');
 
 export const adminTagActionFn = call<
-  { codes: string[]; action: string; note?: string },
+  { codes: string[]; action: string; note?: string; reason?: string },
   { done: number; skipped: { code: string; reason: string }[] }
 >('adminTagAction');
 
@@ -66,6 +66,20 @@ export const adminListDeletedAccountsFn = call<{ after?: string | null }, import
 export const adminListVehiclesFn = call<{ q?: string; filter?: string; province?: string | null; after?: string | null }, import('./directoryService').VehicleListResult>('adminListVehicles');
 export const adminVehicleStatsFn = call<Record<string, never>, import('./directoryService').VehicleStats>('adminVehicleStats');
 export const adminGetVehicleFn = call<{ vehicleId: string }, import('./directoryService').VehicleDetail>('adminGetVehicle');
+
+// ---------------------------------------------------------------- ekip, yetkiler ve kritik işlemler
+export const staffSignInFn = call<Record<string, never>, { superAdmin: boolean; positionName: string | null; perms: string[]; name: string }>('staffSignIn');
+export const adminTeamOverviewFn = call<Record<string, never>, import('./teamService').TeamOverview>('adminTeamOverview');
+export const adminTeamMemberFn = call<{ email: string }, import('./teamService').MemberDetail>('adminTeamMember');
+export const adminTeamAddMemberFn = call<{ email: string; positionId: string }, { ok: boolean }>('adminTeamAddMember');
+export const adminTeamUpdateMemberFn = call<{ email: string; positionId?: string; status?: 'active' | 'suspended' }, { ok: boolean; closedSessions?: number }>('adminTeamUpdateMember');
+export const adminTeamRemoveMemberFn = call<{ email: string }, { ok: boolean; closedSessions: number }>('adminTeamRemoveMember');
+export const adminTeamRevokeSessionsFn = call<{ email: string; sessionId?: string }, { ok: boolean; closedSessions: number }>('adminTeamRevokeSessions');
+export const adminTeamSavePositionFn = call<{ id?: string; name: string; description: string; perms: string[] }, { ok: boolean; id: string; perms: string[]; affectedMembers: number }>('adminTeamSavePosition');
+export const adminTeamDeletePositionFn = call<{ id: string }, { ok: boolean }>('adminTeamDeletePosition');
+export const adminLiftLimitFn = call<{ email: string; kind: 'user_delete' | 'purge' }, { ok: boolean }>('adminLiftLimit');
+export const adminMyQuotaFn = call<{ kind: 'user_delete' | 'purge' }, { used: number; limit: number | null; remaining: number | null; lifted: boolean }>('adminMyQuota');
+export const adminDeleteUserFn = call<{ uid: string; reason: string }, { ok: boolean; vehicles: number; tags: number }>('adminDeleteUser');
 
 /** Firebase hata nesnesinden kullanıcıya gösterilecek mesajı çıkarır. */
 export function functionErrorMessage(err: unknown, fallback = 'Bir hata oluştu. Lütfen tekrar deneyin.'): string {

@@ -173,7 +173,7 @@ export const AdminBatchView: React.FC<Props> = ({ lang, isDark, role, batchId, b
         sub={sub}
         right={(
           <>
-            <Btn icon="zip" onClick={() => zip(list, `${batchId}.zip`)} disabled={!!busy || !tags}>{L('Tümünü ZIP indir', 'Download all')}</Btn>
+            {canDo(role, 'zip') && <Btn icon="zip" onClick={() => zip(list, `${batchId}.zip`)} disabled={!!busy || !tags}>{L('Tümünü ZIP indir', 'Download all')}</Btn>}
             <RowMenu
               label={L('Parti işlemleri', 'Batch actions')}
               items={[
@@ -330,7 +330,7 @@ export const AdminBatchView: React.FC<Props> = ({ lang, isDark, role, batchId, b
             {L('Basıldı olarak işaretle', 'Mark printed')}
           </Btn>
         )}
-        <Btn icon="zip" disabled={!!busy || zipBusy} onClick={() => zip(selTags, `${batchId}_secili_${selTags.length}.zip`)}>{L('ZIP indir', 'Download ZIP')}</Btn>
+        {canDo(role, 'zip') && <Btn icon="zip" disabled={!!busy || zipBusy} onClick={() => zip(selTags, `${batchId}_secili_${selTags.length}.zip`)}>{L('ZIP indir', 'Download ZIP')}</Btn>}
         {canDo(role, 'trash') && <Btn icon="trash" variant="danger" disabled={!!busy} onClick={() => trash(selTags)}>{L('Çöpe at', 'Trash')}</Btn>}
         {canDo(role, 'unrelease') && selSale.length > 0 && (
           <Btn icon="undo" disabled={!!busy} onClick={() => run(selSale.map((t) => t.code), 'unrelease', (n) => L(`${nf.format(n)} QR depoya geri alındı.`, `${n} returned to stock.`))}>

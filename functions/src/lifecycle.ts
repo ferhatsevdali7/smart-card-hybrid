@@ -17,7 +17,9 @@
 
 import { FieldValue, DocumentReference, Transaction } from 'firebase-admin/firestore';
 import { onCall, HttpsError, CallableRequest } from 'firebase-functions/v2/https';
-import { db, requireStaff, parseCode, StaffRole } from './helpers';
+import { db, parseCode, sha256 } from './helpers';
+import { dayKey } from './stats';
+import { StaffAccess, recordCritical, requirePerm, requireReason, requireRecentAuth as requireFreshLogin, requireAnyStaff, requireSuperAdmin, reserveQuota } from './permissions';
 import { ACCOUNT_DELETED } from './config';
 
 export type Stage = 'in_stock' | 'on_sale' | 'active' | 'disabled' | 'expired' | 'trashed';
@@ -31,19 +33,19 @@ export const TAG_ACTIONS: TagAction[] = [
   'release', 'unrelease', 'mark_printed', 'unmark_printed', 'trash', 'restore', 'disable', 'enable', 'expire', 'reset', 'purge',
 ];
 
-/** Hangi işlemi hangi rol yapabilir (super_admin her şeyi yapar). */
-const ACTION_ROLES: Record<TagAction, StaffRole[]> = {
-  release: ['production', 'warehouse'],
-  unrelease: ['production', 'warehouse'],
-  mark_printed: ['production', 'warehouse'],
-  unmark_printed: ['production', 'warehouse'],
-  trash: ['production'],
-  restore: ['production'],
-  disable: ['support'],
-  enable: ['support'],
-  expire: ['support'],
-  reset: ['support'],
-  purge: [], // yalnızca süper yönetici
+/** Her işlem için gereken yetki (Ekip ve Yetkiler > pozisyon tablosu) */
+export const ACTION_PERM: Record<TagAction, string> = {
+  release: 'act.release',
+  unrelease: 'act.unrelease',
+  mark_printed: 'act.print',
+  unmark_printed: 'act.print',
+  trash: 'act.trash',
+  restore: 'act.restore',
+  disable: 'act.disable',
+  enable: 'act.enable',
+  expire: 'act.expire',
+  reset: 'act.reset',
+  purge: 'act.purge', // kritik: her işlemde şifre + sebep, günlük sınır
 };
 
 /** Denetim kaydında kullanılan işlem adları */
@@ -64,7 +66,6 @@ const EVENT_NAMES: Record<TagAction, string> = {
 export const TOMBSTONES = 'tag_tombstones';
 const MAX_CODES_PER_CALL = 500;
 const CHUNK = 100;
-const REAUTH_SECONDS = 5 * 60;
 
 export function stageOf(status: unknown): Stage | null {
   if (status === 'unclaimed') return 'in_stock';
@@ -318,20 +319,16 @@ function parseCodes(input: unknown): string[] {
   return [...out];
 }
 
-/** Kalıcı silme: yalnızca süper yönetici ve son 5 dakikada şifresini doğrulamış olmalı. */
-function requireRecentAuth(req: CallableRequest): void {
-  const authTime = Number(req.auth?.token?.auth_time || 0);
-  if (!authTime || Date.now() / 1000 - authTime > REAUTH_SECONDS) {
-    throw new HttpsError('unauthenticated', 'REAUTH_REQUIRED');
-  }
+/** Kısmi iade: kalıcı silmede atlanan QR sayısı kadar hak geri verilir. */
+async function refundPurge(staff: StaffAccess, n: number): Promise<void> {
+  if (staff.superAdmin || n <= 0) return;
+  const ref = db().collection('critical_usage').doc(`${dayKey()}_${sha256(staff.email).slice(0, 20)}`);
+  await ref.set({ purge: FieldValue.increment(-n) }, { merge: true }).catch(() => undefined);
 }
 
-async function staffFor(req: CallableRequest, action: TagAction) {
-  const staff = await requireStaff(req, ACTION_ROLES[action]);
-  if (action === 'purge') {
-    if (staff.role !== 'super_admin') throw new HttpsError('permission-denied', 'Kalıcı silme yalnızca süper yöneticiye açıktır.');
-    requireRecentAuth(req);
-  }
+async function staffFor(req: CallableRequest, action: TagAction): Promise<StaffAccess> {
+  const staff = await requirePerm(req, ACTION_PERM[action]);
+  if (action === 'purge') requireFreshLogin(req);
   return staff;
 }
 
@@ -346,7 +343,25 @@ export const adminTagAction = onCall({ timeoutSeconds: 120 }, async (req) => {
   const codes = parseCodes(req.data?.codes);
   const note = typeof req.data?.note === 'string' ? req.data.note.trim().slice(0, 300) : undefined;
   const staff = await staffFor(req, action);
-  const result = await runTagAction(staff, codes, action, note);
+  // Kalıcı silme kritik bir işlemdir: sebep zorunlu, günlük sınır, süper yöneticiye bildirim.
+  let reason: string | undefined;
+  let refund: (() => Promise<void>) | null = null;
+  if (action === 'purge') {
+    reason = requireReason(req.data?.reason);
+    refund = await reserveQuota(staff, 'purge', codes.length);
+  }
+  let result: ActionResult;
+  try {
+    result = await runTagAction(staff, codes, action, action === 'purge' ? reason : note);
+  } catch (e) {
+    if (refund) await refund();
+    throw e;
+  }
+  if (action === 'purge') {
+    // Atlanan (silinmeyen) QR'lar için ayrılan hak iade edilir.
+    await refundPurge(staff, result.skipped.length);
+    if (result.done) await recordCritical(staff, 'qr_purged', { count: result.done, reason, codes: codes.slice(0, 20) });
+  }
   // Müşteriye bağlı QR'larda (kapat/aç/süre/sıfırla) Kullanıcılar ve Bağlı Araçlar özetleri güncellenir.
   const owners = ownersOf(result);
   if (owners.length) {
@@ -435,7 +450,7 @@ export async function recountAll(): Promise<{ batches: number; migrated: number 
 
 /** Yeni yapıya ilk geçiş (bir kez). Panel açılınca çağrılır; yarıda kalmışsa 10 dakika sonra yeniden denenebilir. */
 export const adminEnsureLifecycle = onCall({ timeoutSeconds: 540 }, async (req) => {
-  await requireStaff(req, ['production', 'support', 'warehouse']);
+  await requireAnyStaff(req);
   const meta = db().collection('stats_meta').doc('lifecycle_v1');
   const claimed = await db().runTransaction(async (tx) => {
     const m = await tx.get(meta);
@@ -459,8 +474,7 @@ export const adminEnsureLifecycle = onCall({ timeoutSeconds: 540 }, async (req) 
 
 /** Sayaçlar bir şekilde kayarsa süper yönetici yeniden hesaplatabilir. */
 export const adminRecountBatches = onCall({ timeoutSeconds: 300 }, async (req) => {
-  const staff = await requireStaff(req, []);
-  if (staff.role !== 'super_admin') throw new HttpsError('permission-denied', 'Bu işlem için yetkiniz yok.');
+  await requireSuperAdmin(req);
   return recountAll();
 });
 
