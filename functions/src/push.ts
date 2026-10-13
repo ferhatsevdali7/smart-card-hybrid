@@ -27,7 +27,7 @@ export async function sendPushToUser(uid: string, payload: PushPayload): Promise
       data: {
         title: payload.title,
         body: payload.body,
-        url: payload.url || '/?view=vehicle',
+        url: payload.url || '/?view=vehicles',
         tag: payload.tag || 'arac-bildirim',
       },
       webpush: {

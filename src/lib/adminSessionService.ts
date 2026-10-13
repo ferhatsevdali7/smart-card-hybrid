@@ -1,6 +1,6 @@
 // src/lib/adminSessionService.ts
 // Bağımsız Admin Oturum Yönetimi & F5 Yenileme Koruması (sessionStorage ile sadece aktif sekmede kalıcı)
-import { StaffRole } from '../types/card';
+import type { StaffRole } from '../types/staff';
 
 export interface AdminSession {
   email: string;

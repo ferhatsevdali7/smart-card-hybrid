@@ -15,8 +15,6 @@ function clean(input: VehicleInput): VehicleInput {
   return {
     plateNumber: (input.plateNumber || '').trim().toUpperCase().slice(0, 16),
     brandModel: (input.brandModel || '').trim().slice(0, 60),
-    ownerName: (input.ownerName || '').trim().slice(0, 60),
-    contactPhone: (input.contactPhone || '').replace(/[^\d+]/g, '').slice(0, 20),
     parkingNote: (input.parkingNote || '').trim().slice(0, 200),
     allowMessages: input.allowMessages !== false,
   };

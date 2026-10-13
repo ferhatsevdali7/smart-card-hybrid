@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState } from 'react';
 import type { AdminThemePref } from '../../lib/adminSessionService';
-import type { StaffRole } from '../../types/card';
+import type { StaffRole } from '../../types/staff';
 
 export type AdminLang = 'tr' | 'en';
 

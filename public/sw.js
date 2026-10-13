@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smart-card-v5-push';
+const CACHE_NAME = 'hf-arac-karti-v6';
 const STATIC_ASSETS = [
   '/',
   '/hf_icon_v3.svg',
@@ -88,7 +88,7 @@ self.addEventListener('push', (event) => {
   }
   const data = payload.data || {};
   const fallback = payload.notification || {};
-  const title = data.title || fallback.title || 'Akıllı Araç Kartı';
+  const title = data.title || fallback.title || 'H***F Araç Kartı';
   const options = {
     body: data.body || fallback.body || 'Aracınız için yeni bir bildirim var.',
     icon: '/notify-icon-192.png',
@@ -96,14 +96,14 @@ self.addEventListener('push', (event) => {
     tag: data.tag || 'arac-bildirim',
     renotify: true,
     vibrate: [150, 80, 150],
-    data: { url: data.url || '/?view=vehicle' }
+    data: { url: data.url || '/?view=notices' }
   };
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  const target = new URL((event.notification.data && event.notification.data.url) || '/?view=vehicle', self.location.origin).href;
+  const target = new URL((event.notification.data && event.notification.data.url) || '/?view=notices', self.location.origin).href;
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const client of list) {

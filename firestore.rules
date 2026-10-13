@@ -248,21 +248,10 @@ service cloud.firestore {
       }
     }
 
-    // ------------------------------------------------------------ Şifreli kasa (sıfır bilgi)
-    match /vaults/{userId} {
-      allow read, write: if signedIn() && request.auth.uid == userId;
-    }
-
-    // ------------------------------------------------------------ SOS / Sosyal kart (rafta)
-    // Herkese açık okuma kapatıldı; yalnızca kart sahibi okuyup yazabilir.
-    match /cards/{cardId} {
-      allow read: if signedIn() && resource.data.get('ownerUid', null) == request.auth.uid;
-      allow create: if signedIn() && request.resource.data.get('ownerUid', null) == request.auth.uid;
-      allow update: if signedIn()
-        && resource.data.get('ownerUid', null) == request.auth.uid
-        && request.resource.data.get('ownerUid', null) == request.auth.uid;
-      allow delete: if signedIn() && resource.data.get('ownerUid', null) == request.auth.uid;
-    }
+    // ------------------------------------------------------------ Profil sırları (şifreli telefon) ve sunucu ayarları
+    // Yalnızca sunucu okur/yazar; müşteri kendi numarasını getMyProfile ile alır.
+    match /user_secrets/{userId}   { allow read, write: if false; }
+    match /server_config/{id}      { allow read, write: if false; }
 
     // ------------------------------------------------------------ Eski sistem (salt okunur)
     match /qr_registry/{tagId} {

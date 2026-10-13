@@ -56,6 +56,8 @@ export const syncMyAccountFn = call<
   { device?: { id: string; platform: string; label: string; standalone: boolean; push: boolean } },
   { ok: boolean }
 >('syncMyAccount');
+export const getMyProfileFn = call<Record<string, never>, { phone: string | null; phoneMasked: string | null }>('getMyProfile');
+export const setMyPhoneFn = call<{ phone: string }, { ok: boolean; phone: string | null; phoneMasked: string | null }>('setMyPhone');
 export const deleteMyAccountFn = call<{ reason?: string }, { ok: boolean; vehicles: number; tags: number }>('deleteMyAccount');
 
 export const adminEnsureDirectoryFn = call<Record<string, never>, { built: boolean }>('adminEnsureDirectory');

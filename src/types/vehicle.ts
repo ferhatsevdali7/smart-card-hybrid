@@ -18,7 +18,8 @@ export interface Vehicle {
   unreadNotices?: number;
 }
 
-export type VehicleInput = Pick<Vehicle, 'plateNumber' | 'brandModel' | 'ownerName' | 'contactPhone' | 'parkingNote' | 'allowMessages'>;
+/** Müşterinin araç formunda düzenleyebildiği alanlar (ad ve telefon artık profilde, şifreli). */
+export type VehicleInput = Pick<Vehicle, 'plateNumber' | 'brandModel' | 'parkingNote' | 'allowMessages'>;
 
 export type NoticeType = 'blocking' | 'lights' | 'window' | 'alarm' | 'other';
 

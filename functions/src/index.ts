@@ -197,7 +197,7 @@ export const sendNotice = onCall(async (req) => {
   await sendPushToUser(v.ownerUid, {
     title: `🚗 ${plate || 'Aracınız'}`,
     body: note ? `${NOTICE_TEXT[type]}: "${note.slice(0, 100)}"` : NOTICE_TEXT[type],
-    url: '/?view=vehicle',
+    url: '/?view=notices',
     tag: `arac-${tag.assignedVehicleId}`,
   });
 
@@ -522,7 +522,7 @@ export const sendTestPush = onCall(async (req) => {
   const sent = await sendPushToUser(uid, {
     title: '🔔 Bildirimler açık',
     body: 'Aracınızın QR kodu okutulup bildirim gönderildiğinde bu şekilde haber vereceğiz.',
-    url: '/?view=vehicle',
+    url: '/?view=notices',
     tag: 'test',
   });
   return { sent };
@@ -539,3 +539,4 @@ export const rollupDailyStats = onSchedule(
     console.log(`[stats] ${days} gün toplandı`);
   },
 );
+export { getMyProfile, setMyPhone } from './profile';

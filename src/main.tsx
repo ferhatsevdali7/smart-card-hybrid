@@ -1,11 +1,11 @@
 import { StrictMode, Suspense, lazy } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-// Ana uygulama ayrı parçada yüklenir; QR okutan ziyaretçi 3D/yönetici kodunu indirmez.
+// Ana uygulama ayrı parçada yüklenir; QR okutan ziyaretçi müşteri/yönetici kodunu indirmez.
 const App = lazy(() => import('./App'))
 import { PublicTagScanPage } from './components/PublicTagScanPage'
 
-// Register Service Worker for offline emergency access
+// Çevrim dışı açılış ve bildirimler için service worker
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch((err) => {
@@ -21,7 +21,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {tagMatch
       ? <PublicTagScanPage code={tagMatch[1].toUpperCase().replace(/[^A-Z0-9]/g, '')} />
-      : <Suspense fallback={<div className="min-h-screen bg-slate-950" />}><App /></Suspense>}
+      : <Suspense fallback={<div className="min-h-screen" />}><App /></Suspense>}
   </StrictMode>,
 )
 

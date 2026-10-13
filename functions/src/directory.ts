@@ -174,12 +174,13 @@ export function buildUserIndex(
   devices: DeviceRow[],
   pushTokens: number,
   isStaff: boolean,
+  profilePhoneMasked: string | null = null,
 ): Data {
   const sorted = sortVehicles(vehicles);
   const email = (user.email || '').toLowerCase();
   const name = (user.displayName || '').trim() || sorted.map((v) => str(v.data.ownerName, 60)).find(Boolean) || '';
   const plates = sorted.map((v) => str(v.data.plateNumber, 16)).filter(Boolean);
-  const phoneMasked = sorted.map((v) => maskPhone(v.data.contactPhone)).find(Boolean) || null;
+  const phoneMasked = profilePhoneMasked || sorted.map((v) => maskPhone(v.data.contactPhone)).find(Boolean) || null;
   const activeTags = ownedTags.filter((t) => stageOf(t.data.status) === 'active').length;
   const closedTags = ownedTags.filter((t) => ['disabled', 'expired'].includes(stageOf(t.data.status) || '')).length;
   const homeScreen = devices.length ? devices.some((d) => d.data.standalone === true) : null;
@@ -209,7 +210,7 @@ export function buildUserIndex(
   };
 }
 
-export function buildVehicleIndex(v: VehicleRow, owner: { name: string; email: string } | null, tag: Data | undefined): Data {
+export function buildVehicleIndex(v: VehicleRow, owner: { name: string; email: string; phoneMasked?: string | null } | null, tag: Data | undefined): Data {
   const plate = str(v.data.plateNumber, 16).toUpperCase();
   const plateNorm = normPlate(plate);
   const state = tagStateOf(v.data, tag);
@@ -232,7 +233,7 @@ export function buildVehicleIndex(v: VehicleRow, owner: { name: string; email: s
     tagStatus: tag && v.data.tagCode ? (stageOf(tag.status) || null) : null,
     tagReason: tag && v.data.tagCode ? (tag.disabledReason || null) : null,
     allowMessages: v.data.allowMessages !== false,
-    phoneMasked: maskPhone(v.data.contactPhone),
+    phoneMasked: maskPhone(v.data.contactPhone) || owner?.phoneMasked || null,
     createdAt: v.data.createdAt instanceof Timestamp ? v.data.createdAt : Timestamp.now(),
     kw: [...kw],
     updatedAt: FieldValue.serverTimestamp(),
@@ -259,13 +260,15 @@ async function authUser(uid: string): Promise<UserRecord | null> {
 export async function refreshUserIndex(uid: string): Promise<boolean> {
   const user = await authUser(uid);
   if (!user) return false;
-  const [vehiclesSnap, tagsSnap, devicesSnap, tokensSnap, oldVehIdx] = await Promise.all([
+  const [vehiclesSnap, tagsSnap, devicesSnap, tokensSnap, oldVehIdx, secretSnap] = await Promise.all([
     db().collection('vehicles').where('ownerUid', '==', uid).get(),
     db().collection('tags').where('assignedUserId', '==', uid).get(),
     db().collection('users').doc(uid).collection('devices').get(),
     db().collection('users').doc(uid).collection('push_tokens').count().get(),
     db().collection(VEHICLE_INDEX).where('ownerUid', '==', uid).select().get(),
+    db().collection('user_secrets').doc(uid).get(),
   ]);
+  const profileMask = secretSnap.exists && typeof secretSnap.get('phoneMasked') === 'string' ? (secretSnap.get('phoneMasked') as string) : null;
   const vehicles: VehicleRow[] = vehiclesSnap.docs.map((d) => ({ id: d.id, data: d.data() }));
   const owned: TagRow[] = tagsSnap.docs.map((d) => ({ code: d.id, data: d.data() }));
   const devices: DeviceRow[] = devicesSnap.docs.map((d) => ({ id: d.id, data: d.data() }));
@@ -278,14 +281,14 @@ export async function refreshUserIndex(uid: string): Promise<boolean> {
     snaps.forEach((s) => { if (s.exists) tagByCode.set(s.id, s.data()!); });
   }
   const staff = await isStaffEmail((user.email || '').toLowerCase());
-  const idx = buildUserIndex(uid, user, vehicles, owned, devices, tokensSnap.data().count, staff);
+  const idx = buildUserIndex(uid, user, vehicles, owned, devices, tokensSnap.data().count, staff, profileMask);
 
   const batch = db().batch();
   batch.set(db().collection(USER_INDEX).doc(uid), idx);
   const live = new Set<string>();
   for (const v of vehicles) {
     live.add(v.id);
-    batch.set(db().collection(VEHICLE_INDEX).doc(v.id), buildVehicleIndex(v, { name: idx.name, email: idx.email }, v.data.tagCode ? tagByCode.get(v.data.tagCode) : undefined));
+    batch.set(db().collection(VEHICLE_INDEX).doc(v.id), buildVehicleIndex(v, { name: idx.name, email: idx.email, phoneMasked: profileMask }, v.data.tagCode ? tagByCode.get(v.data.tagCode) : undefined));
   }
   oldVehIdx.docs.forEach((d) => { if (!live.has(d.id)) batch.delete(d.ref); });
   await batch.commit();
@@ -412,6 +415,7 @@ export async function deleteAccountData(uid: string, input: DeleteInput): Promis
   await deleteCollection(userRef.collection('devices'));
   await userRef.delete();
   await db().collection('vaults').doc(uid).delete();
+  await db().collection('user_secrets').doc(uid).delete();
   for (const c of cardsSnap.docs) await c.ref.delete();
 
   // 3b) Destek talepleri, yazışmaları ve görselleri
@@ -541,6 +545,9 @@ export async function rebuildDirectory(): Promise<{ users: number; vehicles: num
     db().collection(USER_INDEX).select().get(),
     db().collection(VEHICLE_INDEX).select('ownerUid').get(),
   ]);
+  const secretsSnap = await db().collection('user_secrets').select('phoneMasked').get();
+  const maskByUser = new Map<string, string>();
+  secretsSnap.docs.forEach((d) => { const m = d.get('phoneMasked'); if (typeof m === 'string' && m) maskByUser.set(d.id, m); });
 
   const staffEmails = new Set([
     ...SUPER_ADMIN_EMAILS,
@@ -593,12 +600,12 @@ export async function rebuildDirectory(): Promise<{ users: number; vehicles: num
     authIds.add(u.uid);
     const vehicles = byOwner.get(u.uid) || [];
     const idx = buildUserIndex(u.uid, u, vehicles, tagsByOwner.get(u.uid) || [], devByUser.get(u.uid) || [],
-      tokensByUser.get(u.uid) || 0, staffEmails.has((u.email || '').toLowerCase()));
+      tokensByUser.get(u.uid) || 0, staffEmails.has((u.email || '').toLowerCase()), maskByUser.get(u.uid) || null);
     ops.push((b) => b.set(db().collection(USER_INDEX).doc(u.uid), idx));
     for (const v of vehicles) {
       liveVehicles.add(v.id);
       vehicleCount += 1;
-      const vi = buildVehicleIndex(v, { name: idx.name, email: idx.email }, v.data.tagCode ? tagByCode.get(v.data.tagCode) : undefined);
+      const vi = buildVehicleIndex(v, { name: idx.name, email: idx.email, phoneMasked: maskByUser.get(u.uid) || null }, v.data.tagCode ? tagByCode.get(v.data.tagCode) : undefined);
       ops.push((b) => b.set(db().collection(VEHICLE_INDEX).doc(v.id), vi));
     }
   }
@@ -1066,7 +1073,7 @@ export const adminGetVehicle = onCall({ timeoutSeconds: 60 }, async (req) => {
     createdAt: toMs(v.createdAt),
     allowMessages: v.allowMessages !== false,
     parkingNote: str(v.parkingNote, 200),
-    phoneMasked: maskPhone(v.contactPhone),
+    phoneMasked: maskPhone(v.contactPhone) || (typeof o?.phoneMasked === 'string' ? o.phoneMasked : null),
     owner: ownerUid ? {
       uid: ownerUid,
       name: o?.name || str(v.ownerName, 60),

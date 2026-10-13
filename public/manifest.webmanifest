@@ -1,12 +1,13 @@
-﻿{
-  "name": "H***F Hibrit Akıllı Kart",
-  "short_name": "H***F",
-  "description": "Acil Medikal Sağlık Profili, Güvenli Sosyal Kartvizit ve Dijital Araç Kartı",
-  "start_url": "/",
+{
+  "name": "H***F Araç Kartı",
+  "short_name": "Araç Kartı",
+  "description": "Aracınıza yapıştırdığınız QR etiketi okutulduğunda size bildirim gelir; numaranız gizli kalır.",
+  "lang": "tr",
+  "start_url": "/?view=vehicles",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#090B0E",
-  "theme_color": "#000000",
+  "background_color": "#F5F6F8",
+  "theme_color": "#FFFFFF",
   "orientation": "portrait-primary",
   "icons": [
     {
@@ -18,24 +19,15 @@
   ],
   "shortcuts": [
     {
-      "name": "Sağlık Kartı (112)",
-      "short_name": "Sağlık",
-      "description": "Acil Durum Sağlık ve Kan Grubu Profili",
-      "url": "/?view=sos",
+      "name": "Araçlarım",
+      "short_name": "Araçlarım",
+      "url": "/?view=vehicles",
       "icons": [{ "src": "/hf_icon_v3.svg", "sizes": "192x192" }]
     },
     {
-      "name": "Sosyal Kartvizit",
-      "short_name": "Kartvizit",
-      "description": "Dijital Kartvizit ve IBAN Paylaşımı",
-      "url": "/?view=personal",
-      "icons": [{ "src": "/hf_icon_v3.svg", "sizes": "192x192" }]
-    },
-    {
-      "name": "Araç Bildirim",
-      "short_name": "Araç",
-      "description": "Araç Sahibi İletişim ve Park Notu",
-      "url": "/?view=vehicle",
+      "name": "Bildirimler",
+      "short_name": "Bildirimler",
+      "url": "/?view=notices",
       "icons": [{ "src": "/hf_icon_v3.svg", "sizes": "192x192" }]
     }
   ]
